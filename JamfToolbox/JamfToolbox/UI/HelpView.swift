@@ -40,16 +40,19 @@ private let helpSections: [HelpSection] = [
             + "Disabling verification is a last resort.",
     ]),
     HelpSection(title: "Menus and shortcuts", paragraphs: [
-        "⌘N add devices, ⌘R refresh info, ⌘E export, ⌘C copy selected rows, ⌘A select all, ⌘↑ / ⌘↓ move "
+        "⌘N search to add devices, ⌘R refresh info, ⌘E export, ⌘C copy selected rows, ⌘A select all, ⌘↑ / ⌘↓ move "
             + "selected rows, Delete remove selected rows from the list, ⌘, settings. Every action is also in "
             + "the Device menu and the toolbar's Actions menu.",
     ]),
     HelpSection(title: "Using the app", paragraphs: [
         "The main window shows your saved working lists, one for Computers and one for Mobile Devices. Use the "
             + "switch in the toolbar to move between them. Lists persist between launches.",
-        "Add devices: choose Add (⌘N) to search Jamf Pro by name, serial, username, or asset tag and add the "
-            + "results. ⌘-click or Shift-click to select several; devices already in your list appear gray. "
-            + "The window stays open so you can add more.",
+        "Add devices: click the search field at the top left (or press ⌘N) and start typing a name, "
+            + "serial, username, or asset tag. Matching devices appear in a dropdown as you type; press "
+            + "↑ / ↓ and Return, or click one, to add it to the list. The field stays ready so you can add "
+            + "several in a row. Devices already in your list are marked “In list”; choosing one just "
+            + "selects it. Esc closes the dropdown. The search runs against whichever list (Computers or "
+            + "Mobile Devices) is showing.",
         "Remove takes devices off the list only. It never touches Jamf. Refresh Info re-fetches the listed "
             + "devices' details from Jamf Pro and drops devices that no longer exist there. Details (model, "
             + "Wi-Fi MAC, IP) are also filled in automatically when a device is added. For computers the MAC "

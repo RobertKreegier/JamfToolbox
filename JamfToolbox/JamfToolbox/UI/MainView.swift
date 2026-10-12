@@ -7,15 +7,23 @@ struct MainView: View {
         VStack(spacing: 0) {
             // Lives in the content, not the toolbar: a toolbar item that changes
             // with state left the title bar undraggable until the window was resized.
-            Picker("Device type", selection: $model.deviceType) {
-                Text("Computers").tag(DeviceType.computer)
-                Text("Mobile Devices").tag(DeviceType.mobile)
+            HStack {
+                DeviceSearchField(search: model.search, deviceType: model.deviceType)
+                    .frame(width: 320)
+                Spacer()
+                Picker("Device type", selection: $model.deviceType) {
+                    Text("Computers").tag(DeviceType.computer)
+                    Text("Mobile Devices").tag(DeviceType.mobile)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 260)
+                .help("Switch between your computer and mobile device lists")
+                Spacer()
+                Color.clear.frame(width: 320, height: 1)   // balances the search field so the switch centers
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 260)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .help("Switch between your computer and mobile device lists")
             Divider()
             VSplitView {
                 DeviceTableView(entries: model.entries,
@@ -33,6 +41,7 @@ struct MainView: View {
             StatusBar(log: model.log, total: model.entries.count, selected: model.selection.count)
         }
         .frame(minWidth: 860, minHeight: 460)
+        .overlay(alignment: .topLeading) { DeviceSearchDropdown(search: model.search) }
         .toolbar { toolbarContent }
         .onAppear { model.start() }
     }
@@ -43,7 +52,7 @@ struct MainView: View {
             Button { model.openAddDialog() } label: {
                 Label("Add Devices", systemImage: "plus")
             }
-            .help("Search Jamf Pro and add devices to the list (⌘N)")
+            .help("Search Jamf Pro for devices to add (⌘N)")
 
             Button { Task { await model.removeSelected() } } label: {
                 Label("Remove", systemImage: "minus")

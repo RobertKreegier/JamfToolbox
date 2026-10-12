@@ -29,7 +29,7 @@ struct ToolboxCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
-            Button("Add Devices…") { model.openAddDialog() }
+            Button("Find Devices to Add") { model.openAddDialog() }
                 .keyboardShortcut("n")
             Button("Refresh Info") { Task { await model.refreshList() } }
                 .keyboardShortcut("r")
