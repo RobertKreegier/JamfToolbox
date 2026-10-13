@@ -10,7 +10,8 @@ final class SettingsStore: ObservableObject {
     private(set) var keychainAvailable = true
     private(set) var lastSaveError: String?
 
-    private let directory: URL
+    /// Folder holding settings.json (and the Audits folder).
+    let directory: URL
     /// When set, secrets live only in this dictionary and the Keychain is never
     /// touched. Used by previews so they can't read real credentials.
     private var memorySecrets: [String: String]?

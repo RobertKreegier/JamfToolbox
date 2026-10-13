@@ -89,6 +89,14 @@ private let helpSections: [HelpSection] = [
             + "PIN). Delete removes the device's record from Jamf Pro; wipe the device first, because once "
             + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
             + "for a command, nothing is sent and the message names the privilege to ask for.",
+        "Jamf Audits: the third tab runs read-only reports against Jamf Pro and keeps the results. The first "
+            + "report, Static Group Dependencies, shows everything that depends on a static group: policies, "
+            + "configuration profiles, apps, eBooks and restricted software scoped to it, excluded from it or "
+            + "limited by it, plus smart groups and advanced searches whose criteria name it. Run it before "
+            + "renaming or deleting a group. Choose the group type and group, then Run Audit. Results are saved "
+            + "automatically; sort them by date (or group, type, or count) and delete them individually or with "
+            + "Delete Older Than. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. "
+            + "Object types your account can't read are listed as warnings, meaning the result may be incomplete.",
         "The Activity log at the bottom can be resized by dragging the divider above it; right-click the log to "
             + "copy or clear it.",
         "Show Info opens the device's full Jamf Pro record as a collapsible tree. Use the filter box to find "

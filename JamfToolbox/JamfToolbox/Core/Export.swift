@@ -4,6 +4,14 @@ import Foundation
 enum ListExport {
     /// CSV with a header row, using the same quoting rules and `\r\n` line
     /// endings as Python's `csv.writer`, so pasted output is unchanged.
+    /// One CSV line (no line ending), quoted like Python's `csv.writer`.
+    static func csvLine(_ fields: [String]) -> String {
+        fields.map { text in
+            guard text.unicodeScalars.contains(where: { $0 == "," || $0 == "\"" || $0 == "\r" || $0 == "\n" }) else { return text }
+            return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }.joined(separator: ",")
+    }
+
     static func csv(entries: [DeviceEntry], columns: [ColumnField]) -> String {
         func field(_ text: String) -> String {
             // Scan scalars, not Characters: "\r\n" is one Character and would slip past a "\n" check.

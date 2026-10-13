@@ -13,6 +13,9 @@ struct MainView: View {
                     DeviceListTab(model: model, type: .mobile)
                         .tabItem { Text("Mobile Devices") }
                         .tag(MainTab.mobile)
+                    AuditsTab(center: model.audits)
+                        .tabItem { Text("Jamf Audits") }
+                        .tag(MainTab.audits)
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 8)
@@ -24,11 +27,17 @@ struct MainView: View {
                     .frame(minHeight: 90, idealHeight: 90)
             }
             Divider()
-            StatusBar(log: model.log, total: model.entries.count, selected: model.selection.count)
+            StatusBar(log: model.log, audits: model.audits, showingDevices: model.showingDevices,
+                      deviceSummary: deviceSummary)
         }
         .frame(minWidth: 860, minHeight: 460)
         .toolbar { toolbarContent }
         .onAppear { model.start() }
+    }
+
+    private var deviceSummary: String {
+        let total = model.entries.count, selected = model.selection.count
+        return selected > 0 ? "\(selected) of \(total) selected" : "\(total) device\(total == 1 ? "" : "s")"
     }
 
     @ToolbarContentBuilder
@@ -39,7 +48,7 @@ struct MainView: View {
             Button { Task { await model.refreshList() } } label: {
                 Label("Refresh Info", systemImage: "arrow.clockwise")
             }
-            .disabled(model.entries.isEmpty)
+            .disabled(!model.showingDevices || model.entries.isEmpty)
             .help("Re-read every device in the list from Jamf Pro (⌘R)")
         }
 
@@ -47,19 +56,19 @@ struct MainView: View {
             Button { model.moveSelected(-1) } label: {
                 Label("Move Up", systemImage: "chevron.up")
             }
-            .disabled(model.selection.isEmpty)
+            .disabled(!model.showingDevices || model.selection.isEmpty)
             .help("Move the selected devices up (⌘↑)")
 
             Button { model.moveSelected(1) } label: {
                 Label("Move Down", systemImage: "chevron.down")
             }
-            .disabled(model.selection.isEmpty)
+            .disabled(!model.showingDevices || model.selection.isEmpty)
             .help("Move the selected devices down (⌘↓)")
 
             Button { Task { await model.exportList() } } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
-            .disabled(model.entries.isEmpty)
+            .disabled(!model.showingDevices || model.entries.isEmpty)
             .help("Export the list to CSV or Excel (⌘E)")
 
             Menu {
@@ -82,6 +91,7 @@ struct MainView: View {
             } label: {
                 Label("Actions", systemImage: "ellipsis.circle")
             }
+            .disabled(!model.showingDevices)
             .help("Actions for the selected device")
 
             Button { model.openSettings() } label: {
@@ -147,8 +157,16 @@ private struct LogPane: View {
 
 private struct StatusBar: View {
     @ObservedObject var log: ActivityLog
-    let total: Int
-    let selected: Int
+    /// Observed directly so the saved-result count stays current on the Audits tab.
+    @ObservedObject var audits: AuditCenter
+    let showingDevices: Bool
+    let deviceSummary: String
+
+    private var summary: String {
+        guard !showingDevices else { return deviceSummary }
+        let count = audits.results.count
+        return "\(count) saved result\(count == 1 ? "" : "s")"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -157,7 +175,7 @@ private struct StatusBar: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
-            Text(selected > 0 ? "\(selected) of \(total) selected" : "\(total) device\(total == 1 ? "" : "s")")
+            Text(summary)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }

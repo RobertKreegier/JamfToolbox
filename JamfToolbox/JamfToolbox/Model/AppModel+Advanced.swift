@@ -5,7 +5,7 @@ extension AppModel {
     /// Advanced commands act on one device at a time: they are disruptive
     /// enough that each should be confirmed against a specific device.
     func canPerform(_ command: AdvancedCommand) -> Bool {
-        selection.count == 1 && command.applies(to: deviceType)
+        showingDevices && selection.count == 1 && command.applies(to: deviceType)
     }
 
     func perform(_ command: AdvancedCommand) {

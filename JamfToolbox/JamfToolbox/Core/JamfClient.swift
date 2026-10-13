@@ -464,6 +464,15 @@ actor JamfClient {
         return "Device record deleted from Jamf Pro."
     }
 
+    // MARK: Read-only access for audits
+
+    /// A plain authenticated GET. Audits only ever read.
+    func get(_ path: String) async throws -> JSONValue { try await request(path) }
+
+    nonisolated func webURL(page: String, id: String) -> URL? {
+        URL(string: "\(baseURL)/\(page)?id=\(id)&o=r")
+    }
+
     // MARK: Misc
 
     nonisolated func deviceWebURL(type: DeviceType, id: String) -> URL? {

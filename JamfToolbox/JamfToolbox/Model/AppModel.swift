@@ -14,8 +14,16 @@ struct DeviceRef: Hashable {
 enum MainTab: Hashable {
     case computers
     case mobile
+    case audits
 
-    var deviceType: DeviceType { self == .mobile ? .mobile : .computer }
+    /// The device list this tab shows, or nil for non-device tabs.
+    var deviceType: DeviceType? {
+        switch self {
+        case .computers: return .computer
+        case .mobile: return .mobile
+        case .audits: return nil
+        }
+    }
 }
 
 struct SortState: Equatable {
@@ -47,6 +55,7 @@ final class AppModel: ObservableObject {
     @Published var tab: MainTab = .computers {
         didSet {
             guard oldValue != tab else { return }
+            if let type = tab.deviceType { lastDeviceType = type }
             // An open dropdown belongs to the tab being left.
             for search in searches.values { search.dismiss() }
         }
@@ -58,12 +67,19 @@ final class AppModel: ObservableObject {
     @Published private var sorts: [DeviceType: SortState] = [:]
     @Published private var reveals: [DeviceType: RevealRequest] = [:]
 
-    /// The device type of the visible tab. Menus, the toolbar and every action
-    /// act on this list.
+    private var lastDeviceType: DeviceType = .computer
+
+    /// The device type of the visible tab (or the last device tab shown, when
+    /// the Audits tab is up). Menus, the toolbar and every action act on this list.
     var deviceType: DeviceType {
-        get { tab.deviceType }
+        get { tab.deviceType ?? lastDeviceType }
         set { tab = newValue == .mobile ? .mobile : .computers }
     }
+
+    /// False on the Audits tab, where device commands are disabled.
+    var showingDevices: Bool { tab.deviceType != nil }
+
+    let audits: AuditCenter
 
     func selection(for type: DeviceType) -> Set<String> { selections[type] ?? [] }
 
@@ -99,11 +115,13 @@ final class AppModel: ObservableObject {
     init(settings: SettingsStore? = nil) {
         let settings = settings ?? SettingsStore()
         self.settings = settings
+        audits = AuditCenter(store: AuditStore(directory: settings.directory.appendingPathComponent("Audits", isDirectory: true)))
         // Views observe the model; forward settings changes so they refresh.
         settingsObserver = settings.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         for search in searches.values { search.model = self }
+        audits.model = self
         rebuildClient()
     }
 
@@ -208,7 +226,14 @@ final class AppModel: ObservableObject {
     }
 
     /// ⌘N and the + button: jump to the search field.
-    func openAddDialog() { search.focus() }
+    func openAddDialog() {
+        guard showingDevices else {
+            tab = lastDeviceType == .mobile ? .mobile : .computers
+            DispatchQueue.main.async { self.search.focus() }   // after the tab's field exists
+            return
+        }
+        search.focus()
+    }
 
     func selectAndReveal(_ id: String, in type: DeviceType) {
         setSelection([id], for: type)
