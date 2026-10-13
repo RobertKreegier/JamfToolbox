@@ -6,10 +6,13 @@ struct ServiceError: LocalizedError {
     let message: String
     /// True for HTTP 404, which callers treat as "that device no longer exists".
     var isNotFound = false
+    /// True for HTTP 403: the account is authenticated but lacks a privilege.
+    var isPermissionDenied = false
 
-    init(_ message: String, isNotFound: Bool = false) {
+    init(_ message: String, isNotFound: Bool = false, isPermissionDenied: Bool = false) {
         self.message = message
         self.isNotFound = isNotFound
+        self.isPermissionDenied = isPermissionDenied
     }
 
     var errorDescription: String? { message }

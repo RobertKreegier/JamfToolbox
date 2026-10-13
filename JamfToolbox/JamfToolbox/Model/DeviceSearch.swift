@@ -124,4 +124,17 @@ final class DeviceSearch: ObservableObject {
         reset()
         focus()   // stay in the field so several devices can be added in a row
     }
+
+    #if DEBUG
+    /// Shows canned results without searching (previews only).
+    func showPreviewResults(_ entries: [DeviceEntry], query: String) {
+        self.query = query
+        task?.cancel()
+        results = entries
+        highlighted = 0
+        message = nil
+        isSearching = false
+        isOpen = true
+    }
+    #endif
 }

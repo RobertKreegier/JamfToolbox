@@ -49,9 +49,13 @@ final class AppModel: ObservableObject {
     private var settingsObserver: AnyCancellable?
     private var didStart = false
 
-    var version: String {
+    static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
+    var version: String { Self.version }
+
+    /// Off for previews, which shouldn't pop open a Settings window.
+    var opensSettingsWhenUnconfigured = true
 
     init(settings: SettingsStore? = nil) {
         let settings = settings ?? SettingsStore()
@@ -72,7 +76,7 @@ final class AppModel: ObservableObject {
         log.add("Welcome to \(Dialogs.appName) \(version). "
                 + (hasURL ? "Type in the search field to find devices and build your list."
                           : "Open Settings (⌘,) to connect to Jamf Pro."))
-        if !hasURL {
+        if !hasURL && opensSettingsWhenUnconfigured {
             Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 openSettings()

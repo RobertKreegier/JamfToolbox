@@ -11,7 +11,7 @@ struct MainView: View {
                 DeviceSearchField(search: model.search, deviceType: model.deviceType)
                     .frame(width: 320)
                 Spacer()
-                Picker("Device type", selection: $model.deviceType) {
+                Picker("Device type", selection: deviceTypeBinding) {
                     Text("Computers").tag(DeviceType.computer)
                     Text("Mobile Devices").tag(DeviceType.mobile)
                 }
@@ -32,10 +32,12 @@ struct MainView: View {
                                 sort: model.sort,
                                 reveal: model.reveal,
                                 model: model)
-                    .frame(minHeight: 160)
+                    .frame(minHeight: 160, idealHeight: 2000)
+                    .layoutPriority(1)
 
+                // Opens at its minimum height; drag the divider to enlarge it.
                 LogPane(model: model)
-                    .frame(minHeight: 90, idealHeight: 150)
+                    .frame(minHeight: 90, idealHeight: 90)
             }
             Divider()
             StatusBar(log: model.log, total: model.entries.count, selected: model.selection.count)
@@ -46,20 +48,23 @@ struct MainView: View {
         .onAppear { model.start() }
     }
 
+    /// Switching lists changes several published properties (selection, sort,
+    /// search). The segmented control can write its binding during a view
+    /// update, which SwiftUI flags as "publishing changes from within view
+    /// updates", so hop to the next run-loop turn before changing the model.
+    private var deviceTypeBinding: Binding<DeviceType> {
+        Binding(
+            get: { model.deviceType },
+            set: { newValue in
+                DispatchQueue.main.async { model.deviceType = newValue }
+            })
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button { model.openAddDialog() } label: {
-                Label("Add Devices", systemImage: "plus")
-            }
-            .help("Search Jamf Pro for devices to add (⌘N)")
-
-            Button { Task { await model.removeSelected() } } label: {
-                Label("Remove", systemImage: "minus")
-            }
-            .disabled(model.selection.isEmpty)
-            .help("Remove the selected devices from this list. Nothing changes in Jamf Pro.")
-
+        // Adding happens in the search field and removing with Delete/Backspace
+        // (or File > Remove from List), so only Refresh needs a button here.
+        ToolbarItem(placement: .navigation) {
             Button { Task { await model.refreshList() } } label: {
                 Label("Refresh Info", systemImage: "arrow.clockwise")
             }
@@ -93,6 +98,15 @@ struct MainView: View {
                               systemImage: action.symbolName)
                     }
                     .disabled(!model.canPerform(action))
+                }
+                Divider()
+                Menu("Advanced") {
+                    ForEach(AdvancedCommand.available(for: model.deviceType)) { command in
+                        Button { model.perform(command) } label: {
+                            Label(command.label + (command.needsEllipsis ? "…" : ""), systemImage: command.symbolName)
+                        }
+                        .disabled(!model.canPerform(command))
+                    }
                 }
             } label: {
                 Label("Actions", systemImage: "ellipsis.circle")
@@ -154,3 +168,15 @@ private struct StatusBar: View {
         .padding(.vertical, 4)
     }
 }
+
+#if DEBUG
+#Preview("Computers") {
+    MainView(model: PreviewData.model(selected: ["102"]))
+        .frame(width: 1100, height: 620)
+}
+
+#Preview("Mobile Devices") {
+    MainView(model: PreviewData.model(type: .mobile))
+        .frame(width: 1100, height: 620)
+}
+#endif

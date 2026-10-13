@@ -79,15 +79,32 @@ extension AppModel {
         }
     }
 
+    /// Message for a failed command. A missing privilege gets a specific
+    /// explanation (and, when known, the privilege to ask for) instead of a bare 403.
+    func failureMessage(_ error: Error, doing description: String, privilege: String? = nil,
+                        note: String? = nil) -> String {
+        var message = describe(error)
+        if let service = error as? ServiceError, service.isPermissionDenied {
+            message = "Permission denied. Your Jamf Pro account isn't allowed to \(description). "
+                + "Nothing was sent.\n\nAsk a Jamf Pro admin to grant "
+                + (privilege.map { "the “\($0)” privilege" } ?? "the matching privilege")
+                + " to your account or API role (Settings > System > API roles and clients)."
+        } else if let note, message.hasPrefix("HTTP 4") {
+            message += "\n\n" + note
+        }
+        return message
+    }
+
     /// Send a command, logging the outcome and alerting on failure.
-    func send(_ description: String, work: () async throws -> String, onSuccess: (() -> Void)? = nil) async {
+    func send(_ description: String, privilege: String? = nil, note: String? = nil,
+              work: () async throws -> String, onSuccess: (() -> Void)? = nil) async {
         switch await busyScope(description, work) {
-        case .success(let note):
-            log.add("OK — \(description)." + (note.isEmpty ? "" : " \(note)"))
+        case .success(let result):
+            log.add("OK — \(description)." + (result.isEmpty ? "" : " \(result)"))
             onSuccess?()
         case .failure(let error):
-            let message = describe(error)
-            log.add("FAILED — \(description): \(message)")
+            let message = failureMessage(error, doing: description, privilege: privilege, note: note)
+            log.add("FAILED — \(description): \(message.components(separatedBy: "\n").first ?? message)")
             await Dialogs.error(message)
         }
     }

@@ -87,3 +87,7 @@ struct ColumnsSheet: View {
         shown.swapAt(index, target)
     }
 }
+
+#if DEBUG
+#Preview { ColumnsSheet(shown: ColumnField.defaults, done: { _ in }) }
+#endif

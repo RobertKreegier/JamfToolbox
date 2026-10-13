@@ -137,7 +137,8 @@ actor JamfClient {
             tokenExpiry = nil
             throw ServiceError("Session expired or unauthorized (401). Try again.")
         case 403:
-            throw ServiceError("Permission denied (403). The API account lacks a required privilege.")
+            throw ServiceError("Permission denied (403). The API account lacks a required privilege.",
+                               isPermissionDenied: true)
         case 404:
             throw ServiceError("Not found (404): \(path)", isNotFound: true)
         default:
@@ -354,6 +355,113 @@ actor JamfClient {
             return "Name updated in Jamf Pro, but the push-to-device command failed: \(error.message). "
                 + "It will reconcile on the Mac's next inventory update."
         }
+    }
+
+    // MARK: Advanced commands
+
+    private func deviceMDM(_ type: DeviceType, id: String, _ commandData: [String: String]) async throws {
+        switch type {
+        case .computer: try await computerMDMCommand(id: id, commandData)
+        case .mobile: try await mobileMDMCommand(id: id, commandData)
+        }
+    }
+
+    /// Restarts immediately. Mobile devices must be supervised.
+    func restartDevice(type: DeviceType, id: String) async throws -> String {
+        try await deviceMDM(type, id: id, ["commandType": "RESTART_DEVICE"])
+        return "Restart command queued."
+    }
+
+    /// A shut-down device can't be powered back on remotely. Mobile devices must be supervised.
+    func shutDownDevice(type: DeviceType, id: String) async throws -> String {
+        try await deviceMDM(type, id: id, ["commandType": "SHUT_DOWN_DEVICE"])
+        return "Shut Down command queued."
+    }
+
+    /// Clears the Screen Time (restrictions) passcode. Supervised mobile devices only.
+    func clearScreenTimePasscode(id: String) async throws -> String {
+        try await mobileMDMCommand(id: id, ["commandType": "CLEAR_RESTRICTIONS_PASSWORD"])
+        return "Clear Screen Time Passcode command queued."
+    }
+
+    /// The modern command needs the device's unlock token; when the server
+    /// doesn't expose one, fall back to the classic ClearPasscode command.
+    func clearPasscode(id: String) async throws -> String {
+        let token = try await mobileUnlockToken(id)
+        if !token.isEmpty {
+            do {
+                try await mobileMDMCommand(id: id, ["commandType": "CLEAR_PASSCODE", "unlockToken": token])
+                return "Clear Passcode command queued."
+            } catch let error as ServiceError where !error.isPermissionDenied {
+                // fall through to the classic command
+            }
+        }
+        try await mobileCommand("ClearPasscode", id: id)
+        return "Clear Passcode command queued (classic)."
+    }
+
+    private func mobileUnlockToken(_ id: String) async throws -> String {
+        let numeric = try numericID(id)
+        for path in ["/api/v2/mobile-devices/\(numeric)/detail", "/api/v2/mobile-devices/\(numeric)"] {
+            guard let detail = try? await request(path) else { continue }
+            for candidate in [detail["unlockToken"], detail["security"]?["unlockToken"], detail["general"]?["unlockToken"]] {
+                if let token = candidate?.text, !token.isEmpty { return token }
+            }
+        }
+        return ""
+    }
+
+    /// Wakes the device so it checks in. Blank push has its own endpoint (it is
+    /// not an MDM command type); the classic command is the fallback.
+    func blankPush(type: DeviceType, id: String) async throws -> String {
+        let management: String
+        if type == .computer {
+            management = try await computerManagementID(id)
+        } else {
+            management = try await mobileManagementID(id)
+        }
+        if !management.isEmpty {
+            do {
+                let body = try JSONSerialization.data(withJSONObject: ["clientManagementIds": [management]])
+                let response = try await request("/api/v2/mdm/blank-push", method: "POST",
+                                                 body: body, contentType: "application/json")
+                if let failed = response["errorUuids"]?.arrayValue, !failed.isEmpty {
+                    throw ServiceError("Jamf Pro reported an error sending the blank push to this device.")
+                }
+                return "Blank push queued."
+            } catch let error as ServiceError where !error.isPermissionDenied {
+                // fall through to the classic command
+            }
+        }
+        let numeric = try numericID(id)
+        let resource = type == .computer ? "computercommands" : "mobiledevicecommands"
+        try await request("/JSSResource/\(resource)/command/BlankPush/id/\(numeric)", method: "POST")
+        return "Blank push queued (classic)."
+    }
+
+    /// Erases the device. Computers require a 6-digit PIN. There is deliberately
+    /// no second route: retrying a destructive command after an ambiguous
+    /// failure could send it twice.
+    func eraseDevice(type: DeviceType, id: String, pin: String = "") async throws -> String {
+        var data = ["commandType": "ERASE_DEVICE"]
+        if type == .computer { data["pin"] = pin }
+        try await deviceMDM(type, id: id, data)
+        return "Wipe command queued."
+    }
+
+    /// Removes the device record from Jamf Pro (the device itself is untouched).
+    func deleteDevice(type: DeviceType, id: String) async throws -> String {
+        let numeric = try numericID(id)
+        let classic = type == .computer ? "/JSSResource/computers/id/\(numeric)"
+                                        : "/JSSResource/mobiledevices/id/\(numeric)"
+        do {
+            try await request(classic, method: "DELETE")
+        } catch let error as ServiceError where !error.isPermissionDenied && !error.isNotFound {
+            let modern = type == .computer ? "/api/v1/computers-inventory/\(numeric)"
+                                           : "/api/v2/mobile-devices/\(numeric)"
+            try await request(modern, method: "DELETE")
+        }
+        return "Device record deleted from Jamf Pro."
     }
 
     // MARK: Misc

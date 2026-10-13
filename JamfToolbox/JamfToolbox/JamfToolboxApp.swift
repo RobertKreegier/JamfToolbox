@@ -52,6 +52,13 @@ struct ToolboxCommands: Commands {
                 .disabled(!model.canPerform(action))
                 if action == .networkInfo || action == .updateInventory { Divider() }
             }
+            Divider()
+            Menu("Advanced") {
+                ForEach(AdvancedCommand.available(for: model.deviceType)) { command in
+                    Button(command.label + (command.needsEllipsis ? "…" : "")) { model.perform(command) }
+                        .disabled(!model.canPerform(command))
+                }
+            }
         }
 
         CommandGroup(replacing: .help) {

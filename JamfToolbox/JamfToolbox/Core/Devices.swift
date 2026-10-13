@@ -217,3 +217,77 @@ enum DeviceAction: String, CaseIterable, Identifiable {
 
     func isAvailable(for type: DeviceType) -> Bool { !mobileOnly || type == .mobile }
 }
+
+/// Less common, higher-impact commands, grouped under "Advanced" in menus.
+enum AdvancedCommand: String, CaseIterable, Identifiable {
+    case restart
+    case shutDown
+    case blankPush
+    case clearPasscode
+    case clearScreenTime
+    case wipe
+    case delete
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .restart: return "Restart Device"
+        case .shutDown: return "Shut Down Device"
+        case .blankPush: return "Send Blank Push"
+        case .clearPasscode: return "Clear Passcode"
+        case .clearScreenTime: return "Clear Screen Time Passcode"
+        case .wipe: return "Wipe Device"
+        case .delete: return "Delete from Jamf Pro"
+        }
+    }
+
+    /// Prompts get an ellipsis in menus.
+    var needsEllipsis: Bool { self != .blankPush }
+
+    var symbolName: String {
+        switch self {
+        case .restart: return "arrow.clockwise.circle"
+        case .shutDown: return "power"
+        case .blankPush: return "antenna.radiowaves.left.and.right"
+        case .clearPasscode: return "lock.open"
+        case .clearScreenTime: return "hourglass"
+        case .wipe: return "eraser"
+        case .delete: return "trash"
+        }
+    }
+
+    /// Passcode commands only exist for mobile devices.
+    func applies(to type: DeviceType) -> Bool {
+        switch self {
+        case .clearPasscode, .clearScreenTime: return type == .mobile
+        default: return true
+        }
+    }
+
+    static func available(for type: DeviceType) -> [AdvancedCommand] {
+        allCases.filter { $0.applies(to: type) }
+    }
+
+    /// Named so a "permission denied" message can tell the user exactly what to ask for.
+    func privilegeHint(for type: DeviceType) -> String {
+        switch self {
+        case .wipe:
+            return type == .computer ? "Send Computer Remote Wipe Command" : "Send Mobile Device Remote Wipe Command"
+        case .delete:
+            return type == .computer ? "Delete Computers" : "Delete Mobile Devices"
+        default:
+            return "the matching “Send … Command” privilege for “\(label)”"
+        }
+    }
+
+    /// Extra context for failures that usually mean the device doesn't qualify.
+    var supervisionNote: String? {
+        switch self {
+        case .restart, .shutDown, .clearScreenTime:
+            return "On mobile devices this command only works on supervised devices."
+        default:
+            return nil
+        }
+    }
+}

@@ -11,11 +11,15 @@ final class SettingsStore: ObservableObject {
     private(set) var lastSaveError: String?
 
     private let directory: URL
+    /// When set, secrets live only in this dictionary and the Keychain is never
+    /// touched. Used by previews so they can't read real credentials.
+    private var memorySecrets: [String: String]?
     private var fileURL: URL { directory.appendingPathComponent("settings.json") }
 
     static let secretAccounts = ["client_id", "client_secret", "username", "password", "meraki_api_key"]
 
-    init(directory: URL? = nil) {
+    init(directory: URL? = nil, inMemorySecrets: [String: String]? = nil) {
+        memorySecrets = inMemorySecrets
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         var directory = directory
         #if DEBUG
@@ -64,6 +68,7 @@ final class SettingsStore: ObservableObject {
     // MARK: Secrets
 
     func secret(_ account: String) -> String {
+        if let memorySecrets { return memorySecrets[account] ?? "" }
         for service in [Keychain.service, Keychain.legacyService] {
             if let value = Keychain.read(service: service, account: account) {
                 if service == Keychain.legacyService { setSecret(account, value) }  // migrate forward
@@ -80,6 +85,10 @@ final class SettingsStore: ObservableObject {
     /// Returns true when the value went to the Keychain.
     @discardableResult
     func setSecret(_ account: String, _ value: String) -> Bool {
+        if memorySecrets != nil {
+            memorySecrets?[account] = value.isEmpty ? nil : value
+            return true
+        }
         if value.isEmpty {
             // Nothing to store; clear any previous value everywhere.
             Keychain.delete(service: Keychain.service, account: account)

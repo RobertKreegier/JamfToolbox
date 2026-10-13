@@ -139,3 +139,24 @@ struct DeviceSearchDropdown: View {
         .onTapGesture { search.choose(entry) }
     }
 }
+
+#if DEBUG
+#Preview("Search dropdown") {
+    let model = PreviewData.model()
+    model.search.showPreviewResults([PreviewData.computers[0],
+                                     DeviceEntry(id: "150", fields: ["name": "MBP-ARIVERA-OLD", "serial": "C02AA1AAMD6R",
+                                                                     "username": "arivera", "model": "MacBook Pro (13-inch, 2020)"])],
+                                    query: "arivera")
+    return ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading) {
+            DeviceSearchField(search: model.search, deviceType: .computer)
+                .frame(width: 320)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            Spacer()
+        }
+        DeviceSearchDropdown(search: model.search)
+    }
+    .frame(width: 600, height: 300)
+}
+#endif
