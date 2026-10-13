@@ -45,14 +45,14 @@ private let helpSections: [HelpSection] = [
             + "the Device menu and the toolbar's Actions menu.",
     ]),
     HelpSection(title: "Using the app", paragraphs: [
-        "The main window shows your saved working lists, one for Computers and one for Mobile Devices. Use the "
-            + "switch in the toolbar to move between them. Lists persist between launches.",
-        "Add devices: click the search field at the top left (or press ⌘N) and start typing a name, "
+        "The main window has a tab for Computers and a tab for Mobile Devices, each with its own saved "
+            + "working list, search field, selection and sort. Switching tabs keeps each tab as you left it. "
+            + "Lists persist between launches; the column layout is shared by both tabs.",
+        "Add devices: click the search field at the top of the tab (or press ⌘N) and start typing a name, "
             + "serial, username, or asset tag. Matching devices appear in a dropdown as you type; press "
             + "↑ / ↓ and Return, or click one, to add it to the list. The field stays ready so you can add "
             + "several in a row. Devices already in your list are marked “In list”; choosing one just "
-            + "selects it. Esc closes the dropdown. The search runs against whichever list (Computers or "
-            + "Mobile Devices) is showing.",
+            + "selects it. Esc closes the dropdown. Each tab's search field searches its own device type.",
         "Delete or Backspace (or File > Remove from List) takes devices off the list only. It never touches Jamf. Refresh Info re-fetches the listed "
             + "devices' details from Jamf Pro and drops devices that no longer exist there. Details (model, "
             + "Wi-Fi MAC, IP) are also filled in automatically when a device is added. For computers the MAC "

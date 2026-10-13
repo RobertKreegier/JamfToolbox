@@ -19,6 +19,10 @@ final class DeviceSearch: ObservableObject {
     @Published private(set) var focusToken = 0
 
     weak var model: AppModel?
+    /// The list this field searches and adds to.
+    let type: DeviceType
+
+    init(type: DeviceType) { self.type = type }
 
     private static let minimumCharacters = 2
     private static let maximumResults = 12
@@ -37,10 +41,10 @@ final class DeviceSearch: ObservableObject {
     }
 
     /// Closes the dropdown but keeps what was typed.
-    func dismiss() { isOpen = false }
+    func dismiss() { if isOpen { isOpen = false } }
 
     func isInList(_ entry: DeviceEntry) -> Bool {
-        model?.entries.contains { $0.id == entry.id } ?? false
+        model?.entries(for: type).contains { $0.id == entry.id } ?? false
     }
 
     func moveHighlight(_ delta: Int) {
@@ -78,7 +82,6 @@ final class DeviceSearch: ObservableObject {
             message = "Add your Jamf Pro URL and credentials in Settings first."
             return
         }
-        let type = model.deviceType
         do {
             let records = type == .computer
                 ? try await client.searchComputers(term)
@@ -119,8 +122,8 @@ final class DeviceSearch: ObservableObject {
     /// Add the device to the list, or just select it if it's already there.
     func choose(_ entry: DeviceEntry) {
         guard let model else { return }
-        if !isInList(entry) { model.addEntries([entry], type: model.deviceType) }
-        model.selectAndReveal(entry.id)
+        if !isInList(entry) { model.addEntries([entry], type: type) }
+        model.selectAndReveal(entry.id, in: type)
         reset()
         focus()   // stay in the field so several devices can be added in a row
     }

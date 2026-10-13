@@ -12,9 +12,11 @@ struct DeviceTableView: NSViewRepresentable {
     let selection: Set<String>
     let sort: SortState?
     let reveal: RevealRequest?
+    /// Which list this table shows. Each tab has its own table instance.
+    let type: DeviceType
     let model: AppModel
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, type: type) }
 
     func makeNSView(context: Context) -> NSScrollView {
         let coordinator = context.coordinator
@@ -55,6 +57,7 @@ struct DeviceTableView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         let model: AppModel
+        let type: DeviceType
         weak var table: DeviceNSTableView?
         private var entries: [DeviceEntry] = []
         private var columns: [ColumnField] = []
@@ -64,7 +67,10 @@ struct DeviceTableView: NSViewRepresentable {
         /// callbacks that causes aren't mistaken for user actions.
         private var isUpdating = false
 
-        init(model: AppModel) { self.model = model }
+        init(model: AppModel, type: DeviceType) {
+            self.model = model
+            self.type = type
+        }
 
         func installHandlers() {
             guard let table else { return }
@@ -164,14 +170,15 @@ struct DeviceTableView: NSViewRepresentable {
         func tableViewSelectionDidChange(_ notification: Notification) {
             guard !isUpdating, let table else { return }
             let ids = Set(table.selectedRowIndexes.compactMap { $0 < entries.count ? entries[$0].id : nil })
-            if ids != model.selection { model.selection = ids }
+            // Written to this table's own list, never "whichever tab is showing".
+            model.setSelection(ids, for: type)
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
             guard !isUpdating,
                   let descriptor = tableView.sortDescriptors.first,
                   let key = descriptor.key, let field = ColumnField(rawValue: key) else { return }
-            model.sortBy(field, ascending: descriptor.ascending)
+            model.sortBy(field, ascending: descriptor.ascending, type: type)
         }
 
         func tableViewColumnDidMove(_ notification: Notification) {
@@ -198,7 +205,7 @@ struct DeviceTableView: NSViewRepresentable {
         private func makeRowMenu(row: Int, column: Int) -> NSMenu {
             let menu = NSMenu()
             menu.autoenablesItems = false
-            let count = model.selection.count
+            let count = model.selection(for: type).count
 
             // Actions first, in a fixed order for both device types. Mobile-only
             // actions stay visible but disabled on computers so every action
@@ -234,7 +241,7 @@ struct DeviceTableView: NSViewRepresentable {
             // Higher-impact commands live one level down.
             let advanced = NSMenu()
             advanced.autoenablesItems = false
-            for command in AdvancedCommand.available(for: model.deviceType) {
+            for command in AdvancedCommand.available(for: type) {
                 let item = BlockMenuItem(command.label + (command.needsEllipsis ? "…" : "")) { [model] in
                     model.perform(command)
                 }
