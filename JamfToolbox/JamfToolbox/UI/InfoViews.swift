@@ -440,3 +440,22 @@ struct MerakiNetworkSheet: View {
         done(MerakiNetworkChoice(org: org, network: network))
     }
 }
+
+#if DEBUG
+#Preview("Record tree") {
+    RecordTreeView(record: PreviewData.record, box: WindowBox())
+        .frame(width: 720, height: 560)
+}
+
+#Preview("Meraki info") {
+    MerakiInfoView(deviceName: "MBP-ARIVERA", mac: "a4:83:e7:12:34:56", networkName: "High School",
+                   client: PreviewData.merakiClient, note: "Right-click a field to copy it.",
+                   changeLabel: "Search a network…", onChangeNetwork: {}, box: WindowBox())
+        .frame(width: 520, height: 400)
+}
+
+#Preview("Meraki org picker") {
+    MerakiOrgSheet(orgs: [NamedID(id: "1", name: "District"), NamedID(id: "2", name: "Sandbox")],
+                   savedID: "1", done: { _ in })
+}
+#endif

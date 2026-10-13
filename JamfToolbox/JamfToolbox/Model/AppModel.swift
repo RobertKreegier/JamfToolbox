@@ -30,12 +30,14 @@ final class AppModel: ObservableObject {
 
     let settings: SettingsStore
     let log = ActivityLog()
+    let search = DeviceSearch()
 
     @Published var deviceType: DeviceType = .computer {
         didSet {
             guard oldValue != deviceType else { return }
             selection = []
             sort = nil
+            search.reset()
         }
     }
     @Published var selection: Set<String> = []
@@ -47,9 +49,13 @@ final class AppModel: ObservableObject {
     private var settingsObserver: AnyCancellable?
     private var didStart = false
 
-    var version: String {
+    static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
+    var version: String { Self.version }
+
+    /// Off for previews, which shouldn't pop open a Settings window.
+    var opensSettingsWhenUnconfigured = true
 
     init(settings: SettingsStore? = nil) {
         let settings = settings ?? SettingsStore()
@@ -58,6 +64,7 @@ final class AppModel: ObservableObject {
         settingsObserver = settings.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        search.model = self
         rebuildClient()
     }
 
@@ -67,9 +74,9 @@ final class AppModel: ObservableObject {
         didStart = true
         let hasURL = !settings.prefs.jamfURL.isEmpty
         log.add("Welcome to \(Dialogs.appName) \(version). "
-                + (hasURL ? "Click “Add…” to search for devices and build your list."
+                + (hasURL ? "Type in the search field to find devices and build your list."
                           : "Open Settings (⌘,) to connect to Jamf Pro."))
-        if !hasURL {
+        if !hasURL && opensSettingsWhenUnconfigured {
             Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 openSettings()
@@ -158,6 +165,14 @@ final class AppModel: ObservableObject {
             guard let index = list.firstIndex(where: { $0.id == id }) else { return }
             list[index].fields.merge(fields) { $1 }
         }
+    }
+
+    /// ⌘N and the + button: jump to the search field.
+    func openAddDialog() { search.focus() }
+
+    func selectAndReveal(_ id: String) {
+        selection = [id]
+        reveal = RevealRequest(id: id)
     }
 
     func addEntries(_ new: [DeviceEntry], type: DeviceType) {

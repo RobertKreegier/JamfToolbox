@@ -221,11 +221,29 @@ struct DeviceTableView: NSViewRepresentable {
                 }
                 copyCell.isEnabled = !cell.isEmpty
                 menu.addItem(copyCell)
-                menu.addItem(.separator())
             }
-            menu.addItem(BlockMenuItem("Copy row") { [model] in model.copyRows() })
-            menu.addItem(BlockMenuItem(count > 1 ? "Copy rows as CSV" : "Copy row as CSV") { [model] in model.copyRowsAsCSV() })
-            menu.addItem(BlockMenuItem("Copy list as CSV") { [model] in model.copyListAsCSV() })
+            let copy = NSMenu()
+            copy.addItem(BlockMenuItem(count > 1 ? "Rows" : "Row") { [model] in model.copyRows() })
+            copy.addItem(BlockMenuItem(count > 1 ? "Rows as CSV" : "Row as CSV") { [model] in model.copyRowsAsCSV() })
+            copy.addItem(BlockMenuItem("List as CSV") { [model] in model.copyListAsCSV() })
+            let copyItem = NSMenuItem(title: "Copy", action: nil, keyEquivalent: "")
+            copyItem.submenu = copy
+            menu.addItem(copyItem)
+            menu.addItem(.separator())
+
+            // Higher-impact commands live one level down.
+            let advanced = NSMenu()
+            advanced.autoenablesItems = false
+            for command in AdvancedCommand.available(for: model.deviceType) {
+                let item = BlockMenuItem(command.label + (command.needsEllipsis ? "…" : "")) { [model] in
+                    model.perform(command)
+                }
+                item.isEnabled = model.canPerform(command)
+                advanced.addItem(item)
+            }
+            let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
+            advancedItem.submenu = advanced
+            menu.addItem(advancedItem)
             return menu
         }
 

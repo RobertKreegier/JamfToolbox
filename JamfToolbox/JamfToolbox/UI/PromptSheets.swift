@@ -155,3 +155,38 @@ struct ProgressSheet: View {
         .frame(width: 440)
     }
 }
+
+#if DEBUG
+#Preview("Rename") {
+    PreviewSheet(title: "Rename device",
+                 intro: "Rename “MBP-0042” using your configured format. Edit the result below if needed.",
+                 confirmLabel: "Rename",
+                 fields: [PreviewField(label: "New name", value: "Alex Rivera - C02XL0AAJGH5")],
+                 done: { _ in })
+}
+
+#Preview("Lock (Mac)") {
+    PreviewSheet(title: "Lock device",
+                 intro: "Lock “MBP-ARIVERA”. The PIN below will be required to unlock it — record it before continuing.",
+                 confirmLabel: "Lock",
+                 fields: [PreviewField(label: "6-digit PIN", value: ""),
+                          PreviewField(label: "Lock message", value: Preferences().lockMessage, multiline: true)],
+                 done: { _ in })
+}
+
+#Preview("Bulk confirm") {
+    BulkConfirmSheet(title: "Enable Lost Mode",
+                     intro: "Lost Mode will be enabled on 2 device(s), locking each one and showing this message on its screen.",
+                     lines: ["iPad-G5-014  →  iPad-G5-014 - (Lost Mode: Please return to tech desk)",
+                             "iPad-G5-015  →  iPad-G5-015 - (Lost Mode: Please return to tech desk)"],
+                     confirmLabel: "Enable on 2 Device(s)",
+                     warning: "Each device becomes unusable until Lost Mode is turned off.",
+                     done: { _ in })
+}
+
+#Preview("Progress") {
+    let progress = BulkProgress(total: 12)
+    progress.step(4, "iPad-G5-014 (5 of 12)…")
+    return ProgressSheet(title: "Rename devices", progress: progress)
+}
+#endif

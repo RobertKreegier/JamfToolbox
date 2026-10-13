@@ -29,7 +29,7 @@ struct ToolboxCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
-            Button("Add Devices…") { model.openAddDialog() }
+            Button("Find Devices to Add") { model.openAddDialog() }
                 .keyboardShortcut("n")
             Button("Refresh Info") { Task { await model.refreshList() } }
                 .keyboardShortcut("r")
@@ -51,6 +51,13 @@ struct ToolboxCommands: Commands {
                 }
                 .disabled(!model.canPerform(action))
                 if action == .networkInfo || action == .updateInventory { Divider() }
+            }
+            Divider()
+            Menu("Advanced") {
+                ForEach(AdvancedCommand.available(for: model.deviceType)) { command in
+                    Button(command.label + (command.needsEllipsis ? "…" : "")) { model.perform(command) }
+                        .disabled(!model.canPerform(command))
+                }
             }
         }
 

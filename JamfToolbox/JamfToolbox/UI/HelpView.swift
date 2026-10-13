@@ -40,17 +40,20 @@ private let helpSections: [HelpSection] = [
             + "Disabling verification is a last resort.",
     ]),
     HelpSection(title: "Menus and shortcuts", paragraphs: [
-        "⌘N add devices, ⌘R refresh info, ⌘E export, ⌘C copy selected rows, ⌘A select all, ⌘↑ / ⌘↓ move "
+        "⌘N search to add devices, ⌘R refresh info, ⌘E export, ⌘C copy selected rows, ⌘A select all, ⌘↑ / ⌘↓ move "
             + "selected rows, Delete remove selected rows from the list, ⌘, settings. Every action is also in "
             + "the Device menu and the toolbar's Actions menu.",
     ]),
     HelpSection(title: "Using the app", paragraphs: [
         "The main window shows your saved working lists, one for Computers and one for Mobile Devices. Use the "
             + "switch in the toolbar to move between them. Lists persist between launches.",
-        "Add devices: choose Add (⌘N) to search Jamf Pro by name, serial, username, or asset tag and add the "
-            + "results. ⌘-click or Shift-click to select several; devices already in your list appear gray. "
-            + "The window stays open so you can add more.",
-        "Remove takes devices off the list only. It never touches Jamf. Refresh Info re-fetches the listed "
+        "Add devices: click the search field at the top left (or press ⌘N) and start typing a name, "
+            + "serial, username, or asset tag. Matching devices appear in a dropdown as you type; press "
+            + "↑ / ↓ and Return, or click one, to add it to the list. The field stays ready so you can add "
+            + "several in a row. Devices already in your list are marked “In list”; choosing one just "
+            + "selects it. Esc closes the dropdown. The search runs against whichever list (Computers or "
+            + "Mobile Devices) is showing.",
+        "Delete or Backspace (or File > Remove from List) takes devices off the list only. It never touches Jamf. Refresh Info re-fetches the listed "
             + "devices' details from Jamf Pro and drops devices that no longer exist there. Details (model, "
             + "Wi-Fi MAC, IP) are also filled in automatically when a device is added. For computers the MAC "
             + "shown is the primary MAC reported to Jamf, and the IP is the last reported LAN IP; both are "
@@ -62,8 +65,8 @@ private let helpSections: [HelpSection] = [
         "Sorting: click a column header to sort by it (click again to reverse). Or select rows and use the "
             + "up/down buttons (⌘↑ / ⌘↓) to move them by hand. A manual move clears the column sort.",
         "Export writes the current list to a CSV or Excel (.xlsx) file; choose the format in the save dialog.",
-        "Copying: right-click a cell to copy that field, the selected row(s), the row(s) as CSV, or the whole "
-            + "list as CSV. ⌘C copies the selected rows as tab-separated text. CSV copies include a header row "
+        "Copying: right-click a cell to copy that field, or use the Copy submenu for the selected row(s), the "
+            + "row(s) as CSV, or the whole list as CSV. ⌘C copies the selected rows as tab-separated text. CSV copies include a header row "
             + "and paste cleanly into a spreadsheet or a ticket.",
         "Bulk actions: select several devices (Shift-click, ⌘-click, or ⌘A), then right-click and choose "
             + "Toggle Lost Mode, Lock Device, Rename Device, or Open in Jamf Pro; the menu shows how many are "
@@ -78,6 +81,14 @@ private let helpSections: [HelpSection] = [
             + "Inventory) are shown disabled for computers, because Jamf Pro has no equivalent remote command "
             + "for a Mac. If previews are enabled in Settings, you can review and edit the final message or "
             + "name before anything is sent.",
+        "Advanced: right-click a device and choose Advanced (also in the Device menu and the toolbar's "
+            + "Actions menu) for Restart, Shut Down, Send Blank Push, Clear Passcode, Clear Screen Time "
+            + "Passcode, Wipe, and Delete. Clear Passcode and Clear Screen Time Passcode are mobile-only, and "
+            + "Restart, Shut Down and Clear Screen Time Passcode need a supervised device. These act on one "
+            + "device at a time. Wiping asks you to type the device's name (and, for a Mac, set a 6-digit "
+            + "PIN). Delete removes the device's record from Jamf Pro; wipe the device first, because once "
+            + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
+            + "for a command, nothing is sent and the message names the privilege to ask for.",
         "The Activity log at the bottom can be resized by dragging the divider above it; right-click the log to "
             + "copy or clear it.",
         "Show Info opens the device's full Jamf Pro record as a collapsible tree. Use the filter box to find "
@@ -117,7 +128,7 @@ struct HelpView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("\(Dialogs.appName) \(AppModel.shared.version)")
+                    Text("\(Dialogs.appName) \(AppModel.version)")
                         .font(.title2.weight(.semibold))
                     Text("Run common one-off Jamf Pro tasks against computers and mobile devices: Lost Mode, "
                          + "rename, lock, update inventory, and more, using templated messages and names.")
@@ -159,3 +170,7 @@ struct HelpView: View {
         .padding(.top, 4)
     }
 }
+
+#if DEBUG
+#Preview { HelpView(box: WindowBox()).frame(width: 660, height: 620) }
+#endif

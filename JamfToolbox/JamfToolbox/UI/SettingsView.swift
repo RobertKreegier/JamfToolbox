@@ -361,3 +361,9 @@ struct WindowReader: NSViewRepresentable {
         DispatchQueue.main.async { onWindow(view.window) }
     }
 }
+
+#if DEBUG
+#Preview("Connection") { SettingsView(model: PreviewData.model(), pane: .connection) }
+#Preview("Templates") { SettingsView(model: PreviewData.model(), pane: .templates) }
+#Preview("Meraki") { SettingsView(model: PreviewData.model(), pane: .meraki) }
+#endif
