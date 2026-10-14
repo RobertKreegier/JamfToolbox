@@ -228,6 +228,10 @@ private struct AuditResultView: View {
                     Button("Open in Jamf Pro") { open(ids) }
                     Button("Copy Name") { copyNames(ids) }
                 } primaryAction: { ids in open(ids) }
+                Text("Double-click a row, or select rows and click Open in Jamf Pro, to view them in Jamf Pro. "
+                     + "Right-click for more.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 Spacer()
             }
@@ -276,6 +280,9 @@ private struct AuditResultView: View {
             Button("Export CSV…") { Task { await center.exportCSV(result) } }
                 .disabled(result.findings.isEmpty)
             Spacer()
+            Button("Open in Jamf Pro") { open(findingSelection) }
+                .disabled(findingSelection.isEmpty)
+                .help("Open the selected findings in Jamf Pro (or double-click a row)")
             Button("Delete Result", role: .destructive) {
                 Task {
                     if await Dialogs.confirm("Delete this saved result? This can't be undone.", yes: "Delete", no: "Cancel") {
