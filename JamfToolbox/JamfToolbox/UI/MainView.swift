@@ -130,7 +130,7 @@ private struct MainTabs: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .padding(.top, 11)   // the box's top edge runs through the middle of the strip
 
-            Picker("Tab", selection: $model.tab) {
+            Picker("Tab", selection: tabBinding) {
                 Text("Computers").tag(MainTab.computers)
                 Text("Mobile Devices").tag(MainTab.mobile)
                 Text("Jamf Audits").tag(MainTab.audits)
@@ -139,6 +139,18 @@ private struct MainTabs: View {
             .labelsHidden()
             .fixedSize()
         }
+    }
+
+    /// The segmented control writes its value while SwiftUI is still updating
+    /// views; changing the model then (it swaps the whole tab's content) logs
+    /// "Publishing changes from within view updates". Apply it on the next
+    /// run-loop turn instead.
+    private var tabBinding: Binding<MainTab> {
+        Binding(
+            get: { model.tab },
+            set: { newValue in
+                DispatchQueue.main.async { model.tab = newValue }
+            })
     }
 
     /// Only the selected tab exists, so a hidden table can never hold keyboard
