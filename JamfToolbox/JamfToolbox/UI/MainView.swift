@@ -112,36 +112,31 @@ struct MainView: View {
     }
 }
 
-/// The tab strip and the selected tab's content.
+/// The main window's tabs.
 ///
-/// Drawn by hand rather than with `TabView`: on macOS the bordered `TabView`
-/// is an `NSTabView` that lays itself out before it has a size, logging
-/// "Invalid view geometry: width is negative", and newer macOS versions move
-/// an unbordered `TabView` into the title bar. This keeps the look stable.
+/// A plain `TabView`: on current macOS the system puts its tabs in the window's
+/// title bar as a native segmented control. (The bordered style is an
+/// `NSTabView`, which lays itself out before it has a size and logs "Invalid
+/// view geometry: width is negative".) On macOS 13–14 the tabs appear above the
+/// content instead.
 private struct MainTabs: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        ZStack(alignment: .top) {
-            content
-                .padding(.top, 14)   // clear the tab strip
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.top, 11)   // the box's top edge runs through the middle of the strip
-
-            Picker("Tab", selection: tabBinding) {
-                Text("Computers").tag(MainTab.computers)
-                Text("Mobile Devices").tag(MainTab.mobile)
-                Text("Jamf Audits").tag(MainTab.audits)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+        TabView(selection: tabBinding) {
+            DeviceListTab(model: model, type: .computer)
+                .tabItem { Text("Computers") }
+                .tag(MainTab.computers)
+            DeviceListTab(model: model, type: .mobile)
+                .tabItem { Text("Mobile Devices") }
+                .tag(MainTab.mobile)
+            AuditsTab(center: model.audits)
+                .tabItem { Text("Jamf Audits") }
+                .tag(MainTab.audits)
         }
     }
 
-    /// The segmented control writes its value while SwiftUI is still updating
+    /// The tab control writes its value while SwiftUI is still updating
     /// views; changing the model then (it swaps the whole tab's content) logs
     /// "Publishing changes from within view updates". Apply it on the next
     /// run-loop turn instead.
@@ -151,18 +146,6 @@ private struct MainTabs: View {
             set: { newValue in
                 DispatchQueue.main.async { model.tab = newValue }
             })
-    }
-
-    /// Only the selected tab exists, so a hidden table can never hold keyboard
-    /// focus. Selection, sort and search for each list live in the model and
-    /// survive switching.
-    @ViewBuilder
-    private var content: some View {
-        switch model.tab {
-        case .computers: DeviceListTab(model: model, type: .computer)
-        case .mobile: DeviceListTab(model: model, type: .mobile)
-        case .audits: AuditsTab(center: model.audits)
-        }
     }
 }
 
