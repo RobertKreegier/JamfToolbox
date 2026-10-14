@@ -129,9 +129,13 @@ private struct NewAuditView: View {
                 Picker("Report", selection: deferred($center.reportID)) {
                     ForEach(AuditReports.reports(in: center.category)) { Text($0.title).tag($0.id) }
                 }
-                Text(report.summary)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                LabeledContent("Summary") {
+                    Text(report.summary)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .disabled(center.isRunning)
 
