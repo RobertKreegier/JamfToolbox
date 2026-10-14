@@ -28,6 +28,8 @@ final class AuditCenter: ObservableObject {
     @Published private(set) var loadingGroups = false
     @Published private(set) var groupsError: String?
     @Published private(set) var progress: AuditProgress?
+    /// True while profile scopes are being changed from a result.
+    @Published var changingScope = false
 
     let store: AuditStore
     weak var model: AppModel?
@@ -104,8 +106,9 @@ final class AuditCenter: ObservableObject {
         run(report, p)
     }
 
-    /// Re-run a saved result's report with the same inputs, against the current server.
-    func rerun(_ result: AuditResult) {
+    /// Re-run a saved result's report with the same inputs, against the current
+    /// server. `replacing` deletes the old result once the new one is saved.
+    func rerun(_ result: AuditResult, replacing: Bool = false) {
         guard let report = AuditReports.report(result.reportID) else { return }
         var p = result.parameters ?? AuditParameters()
         if result.parameters == nil, let subject = result.subject {   // saved by the first version
@@ -115,7 +118,7 @@ final class AuditCenter: ObservableObject {
         }
         reportID = report.id
         parameters = p
-        run(report, p)
+        run(report, p, replaces: replacing ? result.id : nil)
     }
 
     /// From a device's right-click menu: run a device report for it.
@@ -131,7 +134,7 @@ final class AuditCenter: ObservableObject {
         run(report, p)
     }
 
-    private func run(_ report: AuditReport, _ parameters: AuditParameters) {
+    private func run(_ report: AuditReport, _ parameters: AuditParameters, replaces old: UUID? = nil) {
         guard runTask == nil, let model else { return }
         guard let client = model.client else {
             Task { _ = await model.requireClient() }
@@ -151,6 +154,10 @@ final class AuditCenter: ObservableObject {
                     self.progress = update
                 }
                 try store.save(result)
+                if let old {
+                    store.delete([old])
+                    results.removeAll { $0.id == old }
+                }
                 results.insert(result, at: 0)
                 selection = [result.id]
                 model.log.add("Audit finished: \(report.title): \(result.findings.count) finding(s)"

@@ -89,12 +89,13 @@ private let helpSections: [HelpSection] = [
             + "PIN). Delete removes the device's record from Jamf Pro; wipe the device first, because once "
             + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
             + "for a command, nothing is sent and the message names the privilege to ask for.",
-        "Jamf Audits: the third tab runs read-only reports against Jamf Pro and keeps the results. Choose a "
+        "Jamf Audits: the third tab runs reports against Jamf Pro and keeps the results. Reports only read; the "
+            + "one exception is Config Profiles in Scope, whose Change Scope menu edits a profile's scope after asking. Choose a "
             + "category and a report, fill in its options, and click Run Audit. Static Groups: Group Dependencies, "
             + "Empty Groups, Unused Groups, Stale Group Members, Duplicate Group Names, Compare Group to a List, "
             + "and a device's Group Memberships. Configuration Profiles: Unscoped or Scoped to All, Included and "
             + "Excluded, Deleted or Empty Groups in Scope, Overlapping Payloads, Failed or Pending Installs, a device's "
-            + "Profiles vs. Scope, and a device's Profile Targeting (how each profile reaches it). Device Health: Stale Check-in, Unsupervised Mobile Devices, OS Below "
+            + "Profiles vs. Scope, and a device's Config Profiles in Scope (how each profile reaches it, with Exclude and Remove Target actions). Device Health: Stale Check-in, Unsupervised Mobile Devices, OS Below "
             + "Target, FileVault Off, No Assigned User, Duplicate Serial Numbers, Pending MDM Commands. Policies: "
             + "Disabled but Still Scoped, Enabled with No Scope, Recent Failures, Ongoing with No Trigger.",
         "Device reports use devices from your Computers and Mobile Devices lists; you can also right-click a "

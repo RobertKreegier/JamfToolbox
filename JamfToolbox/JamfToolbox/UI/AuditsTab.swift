@@ -213,7 +213,7 @@ private struct NewAuditView: View {
                     }
                 } else {
                     HStack {
-                        Text("Read-only: audits never change anything in Jamf Pro.")
+                        Text("Audits only read from Jamf Pro. Changes offered on a result always ask first.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -374,9 +374,16 @@ private struct AuditResultView: View {
                         .disabled(!canOpen(ids))
                     Button("Copy Name") { copy(ids, \.objectName) }
                     Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
+                    if offersScopeChanges {
+                        Divider()
+                        scopeChangeButtons(ids)
+                    }
                 } primaryAction: { ids in open(ids) }
-                Text("Double-click a row, or select rows and click Open in Jamf Pro, to view them in Jamf Pro. "
-                     + "Right-click for more.")
+                Text(offersScopeChanges
+                     ? "Select profiles, then use Change Scope (or right-click) to exclude this device or remove a "
+                        + "direct target. Double-click a row to view it in Jamf Pro."
+                     : "Double-click a row, or select rows and click Open in Jamf Pro, to view them in Jamf Pro. "
+                        + "Right-click for more.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -444,6 +451,12 @@ private struct AuditResultView: View {
                 .help("Run this audit again with the same options, against the current server")
             Button("Export CSV…") { Task { await center.exportCSV(result) } }
                 .disabled(result.findings.isEmpty)
+            if offersScopeChanges {
+                Menu("Change Scope") { scopeChangeButtons(findingSelection) }
+                    .fixedSize()
+                    .disabled(center.isRunning || center.changingScope)
+                    .help("Exclude this device from the selected profiles, or remove it as a direct target")
+            }
             Spacer()
             Button("Open in Jamf Pro") { open(findingSelection) }
                 .disabled(!canOpen(findingSelection))
@@ -455,6 +468,22 @@ private struct AuditResultView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Results whose rows carry how the device is directly scoped (a device's
+    /// Config Profiles in Scope).
+    private var offersScopeChanges: Bool { result.findings.contains { $0.directScope != nil } }
+
+    @ViewBuilder
+    private func scopeChangeButtons(_ ids: Set<AuditFinding.ID>) -> some View {
+        let selected = findings(ids)
+        ForEach(ScopeChange.allCases, id: \.self) { change in
+            let count = center.candidates(change, in: selected).count
+            Button(change.title + (count > 1 ? " (\(count) Profiles)…" : "…")) {
+                Task { await center.applyScopeChange(change, to: selected, in: result) }
+            }
+            .disabled(count == 0 || center.isRunning || center.changingScope)
         }
     }
 

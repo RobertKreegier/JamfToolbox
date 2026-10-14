@@ -82,18 +82,23 @@ struct AuditFinding: Codable, Hashable, Identifiable {
     var detail: String
     /// Jamf Pro web page for the object type, e.g. `policies.html`.
     var webPage: String?
+    /// For a device's profiles: how the device is directly scoped, which
+    /// decides the scope changes offered for the row.
+    var directScope: DirectScope?
 
     // "relationship" is the key results saved by the first audit used.
     enum CodingKeys: String, CodingKey {
-        case objectType, objectName, objectID, detail = "relationship", webPage
+        case objectType, objectName, objectID, detail = "relationship", webPage, directScope
     }
 
-    init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil) {
+    init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
+         directScope: DirectScope? = nil) {
         self.objectType = objectType
         self.objectName = objectName
         self.objectID = objectID
         self.detail = detail
         self.webPage = webPage ?? AuditObjects.webPage(forObjectType: objectType)
+        self.directScope = directScope
     }
 
     var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" }
@@ -369,6 +374,9 @@ enum ScopeReading {
         var otherTargets: [String] = []
         var excludedDevices: Set<String> = []
         var excludedGroups: [String: String] = [:]
+        /// Jamf user targets and exclusions, by lower-cased username.
+        var users: Set<String> = []
+        var excludedUsers: Set<String> = []
 
         var isEmpty: Bool { !all && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
         var hasExclusions: Bool { !excludedDevices.isEmpty || !excludedGroups.isEmpty }
@@ -391,6 +399,7 @@ enum ScopeReading {
                     if let id = AuditObjects.entryID(group) { result.groups[id] = AuditObjects.entryName(group) }
                 }
             default:
+                if entry.key == "jss_users" { result.users = userNames(entry.value) }
                 if let items = entry.value.arrayValue, !items.isEmpty {
                     result.otherTargets.append(entry.key.replacingOccurrences(of: "_", with: " "))
                 }
@@ -401,8 +410,13 @@ enum ScopeReading {
             for group in exclusions[kind.scopeKey]?.arrayValue ?? [] {
                 if let id = AuditObjects.entryID(group) { result.excludedGroups[id] = AuditObjects.entryName(group) }
             }
+            result.excludedUsers = userNames(exclusions["jss_users"] ?? .array([]))
         }
         return result
+    }
+
+    private static func userNames(_ list: JSONValue) -> Set<String> {
+        Set((list.arrayValue ?? []).map { AuditObjects.entryName($0).lowercased() }.filter { !$0.isEmpty })
     }
 }
 
