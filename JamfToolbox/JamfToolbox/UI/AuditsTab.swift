@@ -129,9 +129,13 @@ private struct NewAuditView: View {
                 Picker("Report", selection: deferred($center.reportID)) {
                     ForEach(AuditReports.reports(in: center.category)) { Text($0.title).tag($0.id) }
                 }
-                Text(report.summary)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                LabeledContent("Summary") {
+                    Text(report.summary)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .disabled(center.isRunning)
 
@@ -332,13 +336,13 @@ private struct AuditResultView: View {
             Text(result.subject?.name ?? result.report).font(.title2.weight(.semibold))
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 4) {
                 if result.subject != nil { row("Report", result.report) }
-                if !result.subtitle.isEmpty { row("Scope", result.subtitle) }
-                row("Run", result.runAt.formatted(date: .abbreviated, time: .shortened))
-                row("Server", result.server)
-                row("Checked", "\(result.objectsScanned) object\(result.objectsScanned == 1 ? "" : "s")")
                 // A reminder of what the report checks.
                 if let summary = AuditReports.report(result.reportID)?.summary { row("Summary", summary) }
+                if !result.subtitle.isEmpty { row("Scope", result.subtitle) }
+                row("Checked", "\(result.objectsScanned) object\(result.objectsScanned == 1 ? "" : "s")")
                 if !result.findings.isEmpty { row("Found", foundText, bold: true) }
+                row("Server", result.server)
+                row("Run", result.runAt.formatted(date: .abbreviated, time: .shortened))
             }
         }
     }
