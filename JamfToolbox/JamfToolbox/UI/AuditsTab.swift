@@ -130,7 +130,6 @@ private struct NewAuditView: View {
                     ForEach(AuditReports.reports(in: center.category)) { Text($0.title).tag($0.id) }
                 }
                 Text(report.summary)
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -327,19 +326,45 @@ private struct AuditResultView: View {
         .padding(14)
     }
 
+    /// The audit's name, then labeled lines so each piece of information is easy to pick out.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(result.subject?.name ?? result.report).font(.title2.weight(.semibold))
-            Text((result.subject == nil ? [result.subtitle] : [result.report, result.subtitle])
-                 .filter { !$0.isEmpty }.joined(separator: "  ·  "))
-                .foregroundStyle(.secondary)
-            Text("Run \(result.runAt.formatted(date: .abbreviated, time: .shortened)) on \(result.server)  ·  "
-                 + "\(result.objectsScanned) checked")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 4) {
+                if result.subject != nil { row("Report", result.report) }
+                if !result.subtitle.isEmpty { row("Scope", result.subtitle) }
+                row("Run", result.runAt.formatted(date: .abbreviated, time: .shortened))
+                row("Server", result.server)
+                row("Checked", "\(result.objectsScanned) object\(result.objectsScanned == 1 ? "" : "s")")
+                // A reminder of what the report checks.
+                if let summary = AuditReports.report(result.reportID)?.summary { row("Summary", summary) }
+                if !result.findings.isEmpty { row("Found", foundText, bold: true) }
+            }
         }
     }
 
+    private func row(_ label: String, _ value: String, bold: Bool = false) -> some View {
+        GridRow {
+            Text(label + ":")
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .gridColumnAlignment(.trailing)
+            Text(value)
+                .fontWeight(bold ? .semibold : .regular)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var foundText: String {
+        let counts = Dictionary(grouping: result.findings, by: \.objectType).mapValues(\.count)
+        let total = result.findings.count
+        let noun = result.reportID == AuditReports.groupDependenciesID ? "reference" : "finding"
+        return "\(total) \(noun)\(total == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts)
+    }
+
+    /// Shown only when nothing was found (otherwise the Found line says what was).
     @ViewBuilder
     private var summary: some View {
         if result.findings.isEmpty {
@@ -348,12 +373,6 @@ private struct AuditResultView: View {
                   : "Nothing found in what could be checked.",
                   systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
-        } else {
-            let counts = Dictionary(grouping: result.findings, by: \.objectType).mapValues(\.count)
-            Text(result.reportID == AuditReports.groupDependenciesID
-                 ? "Used by \(result.findings.count) reference\(result.findings.count == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts)
-                 : "\(result.findings.count) finding\(result.findings.count == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts))
-                .font(.headline)
         }
     }
 
