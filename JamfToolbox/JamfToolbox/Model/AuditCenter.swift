@@ -1,20 +1,29 @@
 import AppKit
 import SwiftUI
 
-/// State for the Jamf Audits tab: the group picker, the running audit, and saved results.
+/// State for the Jamf Audits tab: the chosen report and its inputs, the
+/// running audit, and saved results.
 @MainActor
 final class AuditCenter: ObservableObject {
     @Published private(set) var results: [AuditResult] = []
     @Published var selection: Set<UUID> = []
 
-    @Published var groupKind: GroupKind = .computer {
+    @Published var reportID = AuditReports.groupDependenciesID {
         didSet {
-            guard oldValue != groupKind else { return }
-            selectedGroupID = nil
-            Task { await loadGroups() }
+            guard oldValue != reportID else { return }
+            // Keep the device kind valid for reports that only cover one side.
+            if !report.kinds.contains(parameters.kind) { parameters.kind = report.kinds[0] }
+            Task { await loadGroupsIfNeeded() }
         }
     }
-    @Published var selectedGroupID: String?
+    @Published var parameters = AuditParameters() {
+        didSet {
+            guard oldValue.kind != parameters.kind else { return }
+            parameters.groupID = nil
+            parameters.deviceID = nil
+            Task { await loadGroupsIfNeeded() }
+        }
+    }
     @Published private(set) var groups: [GroupKind: [GroupSummary]] = [:]
     @Published private(set) var loadingGroups = false
     @Published private(set) var groupsError: String?
@@ -25,6 +34,11 @@ final class AuditCenter: ObservableObject {
     private var runTask: Task<Void, Never>?
 
     var isRunning: Bool { runTask != nil }
+    var report: AuditReport { AuditReports.report(reportID) ?? AuditReports.all[0] }
+    var category: AuditCategory {
+        get { report.category }
+        set { if newValue != category, let first = AuditReports.reports(in: newValue).first { reportID = first.id } }
+    }
 
     init(store: AuditStore) {
         self.store = store
@@ -37,16 +51,30 @@ final class AuditCenter: ObservableObject {
         return results.first { $0.id == id }
     }
 
-    var currentGroups: [GroupSummary] { groups[groupKind] ?? [] }
+    var currentGroups: [GroupSummary] { groups[parameters.kind] ?? [] }
+
+    /// Devices offered by device reports: the working list of the chosen kind.
+    var deviceOptions: [DeviceEntry] { model?.entries(for: parameters.kind.deviceType) ?? [] }
+
+    /// Whether the chosen report has everything it needs.
+    var canRun: Bool {
+        let r = report, p = parameters
+        if r.needs(.group) && (p.groupID ?? "").isEmpty { return false }
+        if r.needs(.device) && (p.deviceID ?? "").isEmpty { return false }
+        if r.needs(.osVersion) && p.osVersion.trimmingCharacters(in: .whitespaces).isEmpty { return false }
+        if r.needs(.pastedList) && AuditReports.pastedValues(p.pastedList).isEmpty { return false }
+        return true
+    }
 
     // MARK: Groups
 
     func loadGroupsIfNeeded() async {
-        if groups[groupKind] == nil { await loadGroups() }
+        guard report.needs(.group), groups[parameters.kind] == nil else { return }
+        await loadGroups()
     }
 
     func loadGroups() async {
-        let kind = groupKind
+        let kind = parameters.kind
         guard let client = model?.client else {
             groupsError = "Connect to Jamf Pro in Settings first."
             return
@@ -55,7 +83,11 @@ final class AuditCenter: ObservableObject {
         groupsError = nil
         defer { loadingGroups = false }
         do {
-            groups[kind] = try await StaticGroupDependencyAudit.staticGroups(kind, client: client)
+            let listing = try await client.get("/JSSResource/\(kind.resource)")
+            groups[kind] = AuditObjects.entries(in: listing)
+                .map { GroupSummary(id: $0.id, name: $0.name, isSmart: AuditObjects.isTrue($0.json["is_smart"])) }
+                .filter { !$0.isSmart }
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         } catch {
             groupsError = model?.failureMessage(error, doing: "read \(kind.label.lowercased()) groups") ?? error.localizedDescription
         }
@@ -64,18 +96,42 @@ final class AuditCenter: ObservableObject {
     // MARK: Running
 
     func runSelected() {
-        guard let group = currentGroups.first(where: { $0.id == selectedGroupID }) else { return }
-        run(AuditSubject(kind: groupKind, id: group.id, name: group.name))
+        var p = parameters
+        if report.needs(.group) { p.groupName = currentGroups.first { $0.id == p.groupID }?.name }
+        if report.needs(.device) {
+            p.deviceName = deviceOptions.first { $0.id == p.deviceID }.map { $0.value(.name).isEmpty ? $0.id : $0.value(.name) }
+        }
+        run(report, p)
     }
 
-    /// Re-run a saved result's audit against the current server.
+    /// Re-run a saved result's report with the same inputs, against the current server.
     func rerun(_ result: AuditResult) {
-        groupKind = result.subject.kind
-        selectedGroupID = result.subject.id
-        run(AuditSubject(kind: result.subject.kind, id: result.subject.id, name: result.subject.name))
+        guard let report = AuditReports.report(result.reportID) else { return }
+        var p = result.parameters ?? AuditParameters()
+        if result.parameters == nil, let subject = result.subject {   // saved by the first version
+            p.kind = subject.kind
+            p.groupID = subject.id
+            p.groupName = subject.name
+        }
+        reportID = report.id
+        parameters = p
+        run(report, p)
     }
 
-    private func run(_ subject: AuditSubject) {
+    /// From a device's right-click menu: run a device report for it.
+    func runDeviceReport(_ id: String, kind: GroupKind, device: DeviceEntry) {
+        guard let report = AuditReports.report(id) else { return }
+        reportID = id
+        var p = parameters
+        p.kind = kind
+        p.deviceID = device.id
+        p.deviceName = device.value(.name).isEmpty ? device.id : device.value(.name)
+        parameters = p
+        model?.tab = .audits
+        run(report, p)
+    }
+
+    private func run(_ report: AuditReport, _ parameters: AuditParameters) {
         guard runTask == nil, let model else { return }
         guard let client = model.client else {
             Task { _ = await model.requireClient() }
@@ -83,27 +139,27 @@ final class AuditCenter: ObservableObject {
         }
         selection = []   // show the progress in the New Audit pane
         progress = AuditProgress(done: 0, total: 0, message: "Starting…")
-        model.log.add("Audit started: what depends on \(subject.kind.label.lowercased()) group “\(subject.name)”.")
+        let about = parameters.groupName ?? parameters.deviceName
+        model.log.add("Audit started: \(report.title)" + (about.map { " for “\($0)”" } ?? "") + ".")
         runTask = Task {
             defer {
                 progress = nil
                 runTask = nil
             }
             do {
-                let result = try await StaticGroupDependencyAudit.run(subject: subject, client: client) { update in
+                let result = try await AuditReports.run(report, parameters: parameters, client: client) { update in
                     self.progress = update
                 }
                 try store.save(result)
                 results.insert(result, at: 0)
                 selection = [result.id]
-                let objects = Set(result.findings.map { "\($0.objectType)|\($0.objectID)" }).count
-                model.log.add("Audit finished: “\(subject.name)” is used by \(objects) object(s)"
+                model.log.add("Audit finished: \(report.title): \(result.findings.count) finding(s)"
                               + (result.warnings.isEmpty ? "." : " (\(result.warnings.count) warning(s); results may be incomplete)."))
             } catch is CancellationError {
                 model.log.add("Audit cancelled.")
             } catch {
-                let message = model.describe(error)
-                model.log.add("Audit failed: \(message)")
+                let message = model.failureMessage(error, doing: "run \(report.title)")
+                model.log.add("Audit failed: \(message.components(separatedBy: "\n").first ?? message)")
                 await Dialogs.error(message)
             }
         }
@@ -137,12 +193,13 @@ final class AuditCenter: ObservableObject {
         panel.title = "Export audit result"
         panel.allowedContentTypes = [.commaSeparatedText]
         let day = result.runAt.formatted(.iso8601.year().month().day())
-        panel.nameFieldStringValue = "Group dependencies - \(result.subject.name) - \(day).csv"
+        let about = result.subject.map { " - \($0.name)" } ?? ""
+        panel.nameFieldStringValue = "\(result.report)\(about) - \(day).csv".replacingOccurrences(of: "/", with: "-")
         let response: NSApplication.ModalResponse
         if let window = Dialogs.anchor { response = await panel.beginSheetModal(for: window) } else { response = panel.runModal() }
         guard response == .OK, let url = panel.url else { return }
-        var lines = [ListExport.csvLine(["Type", "Name", "Relationship", "Jamf ID"])]
-        lines += result.findings.map { ListExport.csvLine([$0.objectType, $0.objectName, $0.relationship, $0.objectID]) }
+        var lines = [ListExport.csvLine(["Type", "Name", result.detailHeading, "Jamf ID"])]
+        lines += result.findings.map { ListExport.csvLine([$0.objectType, $0.objectName, $0.detail, $0.objectID]) }
         do {
             try (Data([0xEF, 0xBB, 0xBF]) + Data((lines.joined(separator: "\r\n") + "\r\n").utf8)).write(to: url, options: .atomic)
             model?.log.add("Exported audit result to \(url.lastPathComponent).")

@@ -9,7 +9,7 @@ struct AuditsTab: View {
     var body: some View {
         HSplitView {
             SavedResultsList(center: center)
-                .frame(minWidth: 330, idealWidth: 400, maxWidth: 560)
+                .frame(minWidth: 330, idealWidth: 420, maxWidth: 600)
             Group {
                 if let result = center.selectedResult {
                     AuditResultView(center: center, result: result)
@@ -17,7 +17,7 @@ struct AuditsTab: View {
                     NewAuditView(center: center)
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 460, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -42,12 +42,12 @@ private struct SavedResultsList: View {
                 TableColumn("Date", value: \.runAt) { result in
                     Text(result.runAt, format: .dateTime.year().month(.abbreviated).day().hour().minute())
                 }
-                .width(min: 120, ideal: 140)
-                TableColumn("Group", value: \.subject.name)
-                TableColumn("Type", value: \.subject.kind.label)
-                    .width(min: 60, ideal: 90)
+                .width(min: 110, ideal: 135)
+                TableColumn("Report", value: \.report)
+                    .width(min: 90, ideal: 150)
+                TableColumn("Subject", value: \.subjectLabel)
                 TableColumn("Found", value: \.findings.count) { result in
-                    Text("\(objectCount(result))").monospacedDigit()
+                    Text("\(result.findings.count)").monospacedDigit()
                 }
                 .width(min: 40, ideal: 50)
             }
@@ -88,11 +88,6 @@ private struct SavedResultsList: View {
     }
 }
 
-/// Objects (not relationships) that depend on the group.
-private func objectCount(_ result: AuditResult) -> Int {
-    Set(result.findings.map { "\($0.objectType)|\($0.objectID)" }).count
-}
-
 private struct DeleteOlderSheet: View {
     let count: (Date) -> Int
     let done: (Date?) -> Void
@@ -125,38 +120,25 @@ private struct NewAuditView: View {
     @ObservedObject var center: AuditCenter
 
     var body: some View {
+        let report = center.report
         Form {
             Section("Report") {
-                LabeledContent("Report", value: StaticGroupDependencyAudit.reportName)
-                Text("Finds everything in Jamf Pro that depends on a static group: what it's scoped to, "
-                     + "excluded from, or limited by, and any smart group or advanced search whose criteria "
-                     + "name it. Use it before renaming or deleting a group. Read-only.")
+                Picker("Category", selection: deferred($center.category)) {
+                    ForEach(AuditCategory.allCases) { Text($0.rawValue).tag($0) }
+                }
+                Picker("Report", selection: deferred($center.reportID)) {
+                    ForEach(AuditReports.reports(in: center.category)) { Text($0.title).tag($0.id) }
+                }
+                Text(report.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .disabled(center.isRunning)
 
-            Section("Group") {
-                Picker("Group type", selection: $center.groupKind) {
-                    ForEach(GroupKind.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .disabled(center.isRunning)
-
-                HStack {
-                    Picker("Static group", selection: $center.selectedGroupID) {
-                        Text(center.loadingGroups ? "Loading…" : "Choose a group").tag(String?.none)
-                        ForEach(center.currentGroups) { Text($0.name).tag(Optional($0.id)) }
-                    }
-                    .disabled(center.isRunning || center.currentGroups.isEmpty)
-                    Button { Task { await center.loadGroups() } } label: { Image(systemName: "arrow.clockwise") }
-                        .help("Reload groups from Jamf Pro")
-                        .disabled(center.loadingGroups || center.isRunning)
-                }
-                if let error = center.groupsError {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                } else if !center.loadingGroups, center.groups[center.groupKind] != nil, center.currentGroups.isEmpty {
-                    Text("No static \(center.groupKind.label.lowercased()) groups found.").foregroundStyle(.secondary)
-                }
+            if !report.inputs.isEmpty || report.kinds.count == 1 {
+                Section("Options") { inputs(report) }
+                    .disabled(center.isRunning)
             }
 
             Section {
@@ -175,24 +157,126 @@ private struct NewAuditView: View {
                     }
                 } else {
                     HStack {
+                        Text("Read-only: audits never change anything in Jamf Pro.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Button("Run Audit") { center.runSelected() }
                             .keyboardShortcut(.defaultAction)
-                            .disabled(center.selectedGroupID == nil)
+                            .disabled(!center.canRun)
                     }
                 }
             }
-
-            Section("What's checked") {
-                let types = StaticGroupDependencyAudit.objectTypes.filter { $0.kinds.contains(center.groupKind) }
-                Text(types.map(\.plural).joined(separator: ", ").prefix(1).uppercased()
-                     + types.map(\.plural).joined(separator: ", ").dropFirst() + ".")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
-        .task { await center.loadGroupsIfNeeded() }
+        .task(id: center.reportID) { await center.loadGroupsIfNeeded() }
+    }
+
+    @ViewBuilder
+    private func inputs(_ report: AuditReport) -> some View {
+        if report.needs(.kind) && report.kinds.count > 1 {
+            Picker("Devices", selection: deferred($center.parameters.kind)) {
+                ForEach(report.kinds) { Text($0.label + "s").tag($0) }
+            }
+            .pickerStyle(.segmented)
+        } else if report.kinds.count == 1 {
+            LabeledContent("Devices", value: report.kinds[0].label + "s")
+        }
+
+        if report.needs(.group) { groupPicker }
+        if report.needs(.device) { devicePicker }
+
+        if report.needs(.days) {
+            LabeledContent(report.category == .policies ? "Within the last" : "Not seen for") {
+                NumberField(value: $center.parameters.days, range: 1...3650, unit: "days")
+            }
+        }
+        if report.needs(.threshold) {
+            LabeledContent("At least") {
+                NumberField(value: $center.parameters.threshold, range: 1...1000, unit: "pending commands")
+            }
+        }
+        if report.needs(.osVersion) {
+            TextField("Target version", text: $center.parameters.osVersion,
+                      prompt: Text(center.parameters.kind == .computer ? "e.g. 15.4" : "e.g. 18.0"))
+        }
+        if report.needs(.pastedList) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Paste serial numbers, names, UDIDs or MAC addresses, one per line (or a CSV: the first column is used).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $center.parameters.pastedList)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(height: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.3)))
+                let count = AuditReports.pastedValues(center.parameters.pastedList).count
+                Text("\(count) value\(count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var groupPicker: some View {
+        HStack {
+            Picker("Static group", selection: $center.parameters.groupID) {
+                Text(center.loadingGroups ? "Loading…" : "Choose a group").tag(String?.none)
+                ForEach(center.currentGroups) { Text($0.name).tag(Optional($0.id)) }
+            }
+            .disabled(center.currentGroups.isEmpty)
+            Button { Task { await center.loadGroups() } } label: { Image(systemName: "arrow.clockwise") }
+                .help("Reload groups from Jamf Pro")
+                .disabled(center.loadingGroups)
+        }
+        if let error = center.groupsError {
+            Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+        } else if !center.loadingGroups, center.groups[center.parameters.kind] != nil, center.currentGroups.isEmpty {
+            Text("No static \(center.parameters.kind.label.lowercased()) groups found.").foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var devicePicker: some View {
+        let devices = center.deviceOptions
+        Picker("Device", selection: $center.parameters.deviceID) {
+            Text("Choose a device").tag(String?.none)
+            ForEach(devices) { entry in
+                let name = entry.value(.name).isEmpty ? entry.id : entry.value(.name)
+                let serial = entry.value(.serial)
+                Text(serial.isEmpty ? name : "\(name) (\(serial))").tag(Optional(entry.id))
+            }
+        }
+        .disabled(devices.isEmpty)
+        Text(devices.isEmpty
+             ? "Add the device to your \(center.parameters.kind.label) list first. You can also right-click a device in its list and choose Audit."
+             : "Devices come from your \(center.parameters.kind.label) list. You can also right-click a device there and choose Audit.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// Pickers here change several published values at once; applying the change
+/// on the next run-loop turn avoids "Publishing changes from within view
+/// updates" when the control writes during a view update.
+private func deferred<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+    Binding(get: { binding.wrappedValue },
+            set: { newValue in DispatchQueue.main.async { binding.wrappedValue = newValue } })
+}
+
+/// A small number entry with a stepper.
+private struct NumberField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let unit: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("", value: Binding(get: { value }, set: { value = min(max($0, range.lowerBound), range.upperBound) }),
+                      format: .number)
+                .frame(width: 64)
+                .multilineTextAlignment(.trailing)
+            Stepper("", value: $value, in: range).labelsHidden()
+            Text(unit).foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -217,16 +301,19 @@ private struct AuditResultView: View {
             if !result.findings.isEmpty {
                 Table(result.findings.sorted(using: sortOrder), selection: $findingSelection, sortOrder: $sortOrder) {
                     TableColumn("Type", value: \.objectType)
-                        .width(min: 120, ideal: 220)
+                        .width(min: 90, ideal: 160)
                     TableColumn("Name", value: \.objectName)
-                    TableColumn("Relationship", value: \.relationship)
-                        .width(min: 90, ideal: 150)
+                        .width(min: 80, ideal: 140)
+                    TableColumn(result.detailHeading, value: \.detail)
+                        .width(min: 120)
                     TableColumn("ID", value: \.objectID)
                         .width(min: 40, ideal: 50)
                 }
                 .contextMenu(forSelectionType: AuditFinding.ID.self) { ids in
                     Button("Open in Jamf Pro") { open(ids) }
-                    Button("Copy Name") { copyNames(ids) }
+                        .disabled(!canOpen(ids))
+                    Button("Copy Name") { copy(ids, \.objectName) }
+                    Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
                 } primaryAction: { ids in open(ids) }
                 Text("Double-click a row, or select rows and click Open in Jamf Pro, to view them in Jamf Pro. "
                      + "Right-click for more.")
@@ -242,13 +329,12 @@ private struct AuditResultView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(result.subject.name).font(.title2.weight(.semibold))
-            Text([result.subject.kind.label + " static group",
-                  result.subject.memberCount.map { "\($0) member(s)" },
-                  result.report].compactMap { $0 }.joined(separator: "  ·  "))
+            Text(result.subject?.name ?? result.report).font(.title2.weight(.semibold))
+            Text((result.subject == nil ? [result.subtitle] : [result.report, result.subtitle])
+                 .filter { !$0.isEmpty }.joined(separator: "  ·  "))
                 .foregroundStyle(.secondary)
             Text("Run \(result.runAt.formatted(date: .abbreviated, time: .shortened)) on \(result.server)  ·  "
-                 + "\(result.objectsScanned) objects checked")
+                 + "\(result.objectsScanned) checked")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -258,16 +344,15 @@ private struct AuditResultView: View {
     private var summary: some View {
         if result.findings.isEmpty {
             Label(result.warnings.isEmpty
-                  ? "Nothing in Jamf Pro refers to this group."
-                  : "No references found in the objects that could be checked.",
+                  ? (result.reportID == AuditReports.groupDependenciesID ? "Nothing in Jamf Pro refers to this group." : "No issues found.")
+                  : "Nothing found in what could be checked.",
                   systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         } else {
-            let counts = Dictionary(grouping: result.findings, by: \.objectType)
-                .mapValues { Set($0.map(\.objectID)).count }
-            let total = objectCount(result)
-            Text("Used by \(total) object\(total == 1 ? "" : "s"): "
-                 + StaticGroupDependencyAudit.describeCounts(counts))
+            let counts = Dictionary(grouping: result.findings, by: \.objectType).mapValues(\.count)
+            Text(result.reportID == AuditReports.groupDependenciesID
+                 ? "Used by \(result.findings.count) reference\(result.findings.count == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts)
+                 : "\(result.findings.count) finding\(result.findings.count == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts))
                 .font(.headline)
         }
     }
@@ -275,13 +360,13 @@ private struct AuditResultView: View {
     private var footer: some View {
         HStack {
             Button("Run Again") { center.rerun(result) }
-                .disabled(center.isRunning)
-                .help("Run this audit again against the current server")
+                .disabled(center.isRunning || AuditReports.report(result.reportID) == nil)
+                .help("Run this audit again with the same options, against the current server")
             Button("Export CSV…") { Task { await center.exportCSV(result) } }
                 .disabled(result.findings.isEmpty)
             Spacer()
             Button("Open in Jamf Pro") { open(findingSelection) }
-                .disabled(findingSelection.isEmpty)
+                .disabled(!canOpen(findingSelection))
                 .help("Open the selected findings in Jamf Pro (or double-click a row)")
             Button("Delete Result", role: .destructive) {
                 Task {
@@ -297,18 +382,22 @@ private struct AuditResultView: View {
         result.findings.filter { ids.contains($0.id) }
     }
 
-    private func open(_ ids: Set<AuditFinding.ID>) {
-        for finding in findings(ids) {
-            guard let page = StaticGroupDependencyAudit.webPage(forObjectType: finding.objectType) ?? finding.webPage,
-                  let url = URL(string: "\(result.server)/\(page)?id=\(finding.objectID)&o=r") else { continue }
-            NSWorkspace.shared.open(url)
-        }
+    private func url(_ finding: AuditFinding) -> URL? {
+        guard !finding.objectID.isEmpty,
+              let page = AuditObjects.webPage(forObjectType: finding.objectType) ?? finding.webPage else { return nil }
+        return URL(string: "\(result.server)/\(page)?id=\(finding.objectID)&o=r")
     }
 
-    private func copyNames(_ ids: Set<AuditFinding.ID>) {
-        let names = Array(Set(findings(ids).map(\.objectName))).sorted()
+    private func canOpen(_ ids: Set<AuditFinding.ID>) -> Bool { findings(ids).contains { url($0) != nil } }
+
+    private func open(_ ids: Set<AuditFinding.ID>) {
+        for finding in findings(ids) { if let url = url(finding) { NSWorkspace.shared.open(url) } }
+    }
+
+    private func copy(_ ids: Set<AuditFinding.ID>, _ field: KeyPath<AuditFinding, String>) {
+        let values = findings(ids).map { $0[keyPath: field] }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)
+        NSPasteboard.general.setString(values.joined(separator: "\n"), forType: .string)
     }
 }
 
