@@ -121,6 +121,12 @@ private let helpSections: [HelpSection] = [
         "Toggle Lost Mode checks whether Lost Mode is currently on for the selected device and offers the "
             + "opposite action: it previews your message before enabling, and simply confirms before turning "
             + "it off. Supervised mobile devices only.",
+        "Message presets: Settings > Templates holds any number of Lost Mode messages (each with its own "
+            + "phone and footnote) and lock messages. Use + and − to add and remove them, and Make Default to "
+            + "choose the one used when previews are off. When you enable Lost Mode or lock a device, pick a "
+            + "preset at the top of the preview and edit the text if needed; bulk actions ask once for the "
+            + "whole batch and fill in each device's {tags}. Locked mobile devices show the message on their "
+            + "lock screen.",
         "Rename sends the Set Device Name command through Jamf Pro's modern MDM commands API for mobile "
             + "devices; for computers it updates the record name and sends the SETTINGS MDM command. The new "
             + "name appears in Jamf's inventory after the device's next check-in; use Refresh Info to pull it in.",
