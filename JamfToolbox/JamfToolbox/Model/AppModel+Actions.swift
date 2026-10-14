@@ -159,21 +159,24 @@ extension AppModel {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let (_, tags) = await loadRecord(device, client: client) else { return }
 
-        let proposed = Templates.render(settings.prefs.renameFormat(for: device.type), tags)
+        let presets = settings.prefs.namePresets.map { preset in
+            PreviewPreset(name: preset.name, values: ["New name": Templates.render(preset.template, tags)])
+        }
+        let proposed = presets[0].values["New name"] ?? ""   // the default preset
         var newName = proposed
         if settings.prefs.verifyNotes {
             guard let result = await askPreview(
                 title: "Rename device",
-                intro: "Rename “\(device.name)” using your configured format. Edit the result below if needed.",
+                intro: "Rename “\(device.name)” using a saved name format. Edit the result below if needed.",
                 fields: [PreviewField(label: "New name", value: proposed)],
-                confirm: "Rename") else {
+                confirm: "Rename", presets: presets) else {
                 log.add("Rename cancelled.")
                 return
             }
             newName = result["New name"] ?? ""
         }
         guard !newName.isEmpty else {
-            await Dialogs.warning("The new name is empty — check your rename format.")
+            await Dialogs.warning("The new name is empty — check the name format in Settings > Templates.")
             return
         }
         await send("Rename \(device.name) → \(newName)", work: {

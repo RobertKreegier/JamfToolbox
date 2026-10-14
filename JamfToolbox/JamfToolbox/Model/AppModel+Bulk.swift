@@ -85,8 +85,14 @@ extension AppModel {
     func bulkRename() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
-        guard let type = devices.first?.type else { return }
-        let template = settings.prefs.renameFormat(for: type)
+        guard !devices.isEmpty else { return }
+        let saved = settings.prefs.namePresets
+        guard let template = await choosePreset(
+            title: "Rename devices", intro: "Which name format should the \(devices.count) device(s) get?",
+            options: saved.map { ($0.name, $0.template) }).map({ saved[$0].template }) else {
+            log.add("Bulk rename cancelled.")
+            return
+        }
         guard let gathered = await bulkPrefetch(devices, client: client) else { return }
 
         var planned: [(device: DeviceRef, newName: String)] = []

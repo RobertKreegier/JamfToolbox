@@ -49,6 +49,25 @@ struct LockPreset: Codable, Hashable, Identifiable {
     }
 }
 
+/// A saved device-name template, usable for computers and mobile devices alike.
+struct NamePreset: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
+    var template: String
+
+    init(name: String, template: String) {
+        self.name = name
+        self.template = template
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
+        template = (try? c.decode(String.self, forKey: .template)) ?? ""
+    }
+}
+
 /// Everything persisted to `settings.json`.
 ///
 /// The file location, key names and value shapes are identical to the Python
@@ -65,8 +84,9 @@ struct Preferences: Codable {
                                           message: "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
                                           footnote: "Property of Rock Ridge Public Schools")]
     var lostModeSound = true
-    var renameFormatComputer = "{realname} - {serial}"
-    var renameFormatMobile = "{realname} - {username} - {serial}"
+    /// Device-name templates for Rename; the first is the default. Never empty.
+    var namePresets = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
+    static let defaultNameTemplate = "{realname} - {username} - {serial}"
     var doubleClickAction = DeviceAction.openInJamf
     /// nil means "use the default column set".
     var listColumns: [String]?
@@ -107,6 +127,7 @@ struct Preferences: Codable {
         case legacyRenameFormat = "rename_format"
         case lostModePresets = "lost_mode_presets"
         case lockPresets = "lock_message_presets"
+        case namePresets = "rename_presets"
     }
 
     init() {}
@@ -134,8 +155,25 @@ struct Preferences: Codable {
                               footnote: value(.lostModeFootnote, defaults.lostModePresets[0].footnote))]
             : presets
         lostModeSound = value(.lostModeSound, lostModeSound)
-        renameFormatComputer = value(.renameFormatComputer, renameFormatComputer)
-        renameFormatMobile = value(.renameFormatMobile, renameFormatMobile)
+        // Name presets replaced the per-type formats. Without saved presets,
+        // start from the default and keep any earlier format that differs.
+        let names = ((try? c.decodeIfPresent([NamePreset].self, forKey: .namePresets)) ?? nil) ?? []
+        if names.isEmpty {
+            var migrated = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
+            func keep(_ key: CodingKeys, as label: String) {
+                guard let format = (try? c.decodeIfPresent(String.self, forKey: key)) ?? nil else { return }
+                let trimmed = format.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty, !migrated.contains(where: { $0.template == trimmed }) {
+                    migrated.append(NamePreset(name: label, template: trimmed))
+                }
+            }
+            keep(.renameFormatComputer, as: "Previous computer format")
+            keep(.renameFormatMobile, as: "Previous mobile format")
+            keep(.legacyRenameFormat, as: "Previous mobile format")
+            namePresets = migrated
+        } else {
+            namePresets = names
+        }
         doubleClickAction = DeviceAction(rawValue: value(.doubleClickAction, doubleClickAction.rawValue)) ?? doubleClickAction
         listColumns = (try? c.decodeIfPresent([String].self, forKey: .listColumns)) ?? nil
         let locks = ((try? c.decodeIfPresent([LockPreset].self, forKey: .lockPresets)) ?? nil) ?? []
@@ -149,13 +187,6 @@ struct Preferences: Codable {
         merakiNetworkID = value(.merakiNetworkID, merakiNetworkID)
         merakiNetworkName = value(.merakiNetworkName, merakiNetworkName)
         credentialsInFile = value(.credentialsInFile, credentialsInFile)
-
-        // The single rename format became per-type templates. The legacy value
-        // was written for mobile devices, so carry it there.
-        let hasMobileFormat = c.contains(.renameFormatMobile)
-        if !hasMobileFormat, let legacy = (try? c.decodeIfPresent(String.self, forKey: .legacyRenameFormat)) ?? nil {
-            renameFormatMobile = legacy
-        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -172,8 +203,10 @@ struct Preferences: Codable {
         try c.encode(defaultLostMode.phone, forKey: .lostModePhone)
         try c.encode(defaultLostMode.footnote, forKey: .lostModeFootnote)
         try c.encode(lostModeSound, forKey: .lostModeSound)
-        try c.encode(renameFormatComputer, forKey: .renameFormatComputer)
-        try c.encode(renameFormatMobile, forKey: .renameFormatMobile)
+        try c.encode(namePresets, forKey: .namePresets)
+        // Older versions (and the Python app) read one format per device type.
+        try c.encode(defaultName.template, forKey: .renameFormatComputer)
+        try c.encode(defaultName.template, forKey: .renameFormatMobile)
         try c.encode(doubleClickAction.rawValue, forKey: .doubleClickAction)
         try c.encode(listColumns, forKey: .listColumns)
         try c.encode(lockPresets, forKey: .lockPresets)
@@ -200,9 +233,7 @@ struct Preferences: Codable {
         if type == .computer { deviceListComputer = list } else { deviceListMobile = list }
     }
 
-    func renameFormat(for type: DeviceType) -> String {
-        type == .computer ? renameFormatComputer : renameFormatMobile
-    }
+    var defaultName: NamePreset { namePresets.first ?? Preferences().namePresets[0] }
 
     /// The user's chosen columns, validated against the catalog.
     var visibleColumns: [ColumnField] {

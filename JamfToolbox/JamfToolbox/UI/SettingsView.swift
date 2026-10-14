@@ -18,8 +18,7 @@ struct SettingsDraft: Equatable {
     var caBundle = ""
     var lostModePresets: [LostModePreset] = Preferences().lostModePresets
     var lostModeSound = true
-    var renameComputer = ""
-    var renameMobile = ""
+    var namePresets: [NamePreset] = Preferences().namePresets
     var lockPresets: [LockPreset] = Preferences().lockPresets
     var merakiKey = ""
 
@@ -38,8 +37,7 @@ struct SettingsDraft: Equatable {
         caBundle = p.sslCABundle
         lostModePresets = p.lostModePresets
         lostModeSound = p.lostModeSound
-        renameComputer = p.renameFormatComputer
-        renameMobile = p.renameFormatMobile
+        namePresets = p.namePresets
         lockPresets = p.lockPresets
         merakiKey = settings.secret("meraki_api_key")
     }
@@ -87,6 +85,7 @@ struct SettingsView: View {
     @State private var testing = false
     @State private var lostSelection: UUID?
     @State private var lockSelection: UUID?
+    @State private var nameSelection: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -126,6 +125,7 @@ struct SettingsView: View {
         loaded = fresh
         lostSelection = fresh.lostModePresets.first?.id
         lockSelection = fresh.lockPresets.first?.id
+        nameSelection = fresh.namePresets.first?.id
     }
 
     // MARK: Panes
@@ -221,12 +221,24 @@ struct SettingsView: View {
                 Text("Shown on the lock screen of locked Macs and mobile devices. You choose one when locking.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Rename") {
-                TextField("Computers", text: $draft.renameComputer)
-                TextField("Mobile devices", text: $draft.renameMobile)
-                Text("For example {username}-{model_short}-{serial_last4}")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
+                presetControls(names: draft.namePresets.map(\.name), ids: draft.namePresets.map(\.id),
+                               selection: $nameSelection,
+                               add: {
+                                   let new = NamePreset(name: "New Format", template: "")
+                                   draft.namePresets.append(new)
+                                   nameSelection = new.id
+                               },
+                               remove: { index in draft.namePresets.remove(at: index); nameSelection = draft.namePresets.first?.id },
+                               makeDefault: { index in draft.namePresets.insert(draft.namePresets.remove(at: index), at: 0) })
+                let i = index(of: nameSelection, in: draft.namePresets.map(\.id))
+                TextField("Name", text: $draft.namePresets[i].name)
+                TextField("Format", text: $draft.namePresets[i].template, prompt: Text("{realname} - {username} - {serial}"))
+            } header: {
+                Text("Device Names")
+            } footer: {
+                Text("Used by Rename for computers and mobile devices alike. For example {username}-{model_short}-{serial_last4}.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 Text("Templates accept {tags}. Choose Jamf Toolbox Help from the Help menu for the full list.")
@@ -393,8 +405,12 @@ struct SettingsView: View {
             return clean
         }
         p.lostModeSound = draft.lostModeSound
-        p.renameFormatComputer = draft.renameComputer.trimmingCharacters(in: .whitespaces)
-        p.renameFormatMobile = draft.renameMobile.trimmingCharacters(in: .whitespaces)
+        p.namePresets = draft.namePresets.map { preset in
+            var clean = preset
+            clean.name = cleanName(preset.name)
+            clean.template = preset.template.trimmingCharacters(in: .whitespaces)
+            return clean
+        }
         p.lockPresets = draft.lockPresets.map { preset in
             var clean = preset
             clean.name = cleanName(preset.name)
