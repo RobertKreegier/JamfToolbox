@@ -342,7 +342,9 @@ private struct AuditResultView: View {
     @ObservedObject var center: AuditCenter
     let result: AuditResult
 
-    @State private var sortOrder = [KeyPathComparator(\AuditFinding.objectType)]
+    /// Empty until a header is clicked, so findings keep the report's own order
+    /// (e.g. targeted before excluded before installed-only).
+    @State private var sortOrder: [KeyPathComparator<AuditFinding>] = []
     @State private var findingSelection = Set<AuditFinding.ID>()
 
     var body: some View {
@@ -357,11 +359,13 @@ private struct AuditResultView: View {
             if !result.findings.isEmpty {
                 Table(result.findings.sorted(using: sortOrder), selection: $findingSelection, sortOrder: $sortOrder) {
                     TableColumn("Type", value: \.objectType)
-                        .width(min: 90, ideal: 160)
+                        .width(min: 90, ideal: 140)
                     TableColumn("Name", value: \.objectName)
                         .width(min: 80, ideal: 140)
-                    TableColumn(result.detailHeading, value: \.detail)
-                        .width(min: 120)
+                    TableColumn(result.detailHeading, value: \.detail) { finding in
+                        Text(finding.detail).help(finding.detail)   // full text on hover when truncated
+                    }
+                    .width(min: 120, ideal: 360)
                     TableColumn("ID", value: \.objectID)
                         .width(min: 40, ideal: 50)
                 }
