@@ -5,20 +5,56 @@ import SwiftUI
 /// selected result or the form for running a new audit.
 struct AuditsTab: View {
     @ObservedObject var center: AuditCenter
+    /// The saved-results width once the divider has been dragged; nil means
+    /// "a third of the tab", the starting layout.
+    @State private var listWidth: CGFloat?
+    @State private var dragStart: CGFloat?
+
+    private static let minList: CGFloat = 260
+    private static let minDetail: CGFloat = 460
 
     var body: some View {
-        HSplitView {
-            SavedResultsList(center: center)
-                .frame(minWidth: 330, idealWidth: 420, maxWidth: 600)
-            Group {
-                if let result = center.selectedResult {
-                    AuditResultView(center: center, result: result)
-                } else {
-                    NewAuditView(center: center)
+        // A plain stack with a drag handle rather than HSplitView, which
+        // ignores the starting width and opens half and half.
+        GeometryReader { geometry in
+            let total = geometry.size.width
+            let maxList = max(Self.minList, total - Self.minDetail - 7)
+            let width = min(max(listWidth ?? total / 3, Self.minList), maxList)
+            HStack(spacing: 0) {
+                SavedResultsList(center: center)
+                    .frame(width: width)
+                ColumnResizeHandle()
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { drag in
+                            let start = dragStart ?? width
+                            dragStart = start
+                            listWidth = min(max(start + drag.translation.width, Self.minList), maxList)
+                        }
+                        .onEnded { _ in dragStart = nil })
+                Group {
+                    if let result = center.selectedResult {
+                        AuditResultView(center: center, result: result)
+                    } else {
+                        NewAuditView(center: center)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 460, maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// The divider between saved results and the result: a hairline with a wider
+/// grab area and the left/right resize cursor.
+private struct ColumnResizeHandle: View {
+    var body: some View {
+        Divider()
+            .padding(.horizontal, 3)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .help("Drag to resize")
     }
 }
 
@@ -26,6 +62,22 @@ struct AuditsTab: View {
 
 private struct SavedResultsList: View {
     @ObservedObject var center: AuditCenter
+
+    static let dateFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MM/dd/yyyy"
+        return f
+    }()
+
+    /// Narrowest widths that show the whole date / the heading with its sort
+    /// arrow, measured in the table's font so they hold at any text size.
+    private static func textWidth(_ text: String) -> CGFloat {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    }
+    static let dateWidth = max(textWidth("00/00/0000"), textWidth("Date") + 16) + 8
+    static let foundWidth = textWidth("Found") + 22
     @State private var sortOrder = [KeyPathComparator(\AuditResult.runAt, order: .reverse)]
 
     var body: some View {
@@ -40,16 +92,17 @@ private struct SavedResultsList: View {
 
             Table(center.results.sorted(using: sortOrder), selection: $center.selection, sortOrder: $sortOrder) {
                 TableColumn("Date", value: \.runAt) { result in
-                    Text(result.runAt, format: .dateTime.year().month(.abbreviated).day().hour().minute())
+                    Text(Self.dateFormat.string(from: result.runAt)).monospacedDigit()
                 }
-                .width(min: 110, ideal: 135)
+                .width(min: Self.dateWidth, ideal: Self.dateWidth, max: Self.dateWidth + 24)
                 TableColumn("Report", value: \.report)
-                    .width(min: 90, ideal: 150)
-                TableColumn("Subject", value: \.subjectLabel)
+                    .width(min: 80, ideal: 150)
+                TableColumn("Scope", value: \.subjectLabel)
+                    .width(min: 80, ideal: 150)
                 TableColumn("Found", value: \.findings.count) { result in
                     Text("\(result.findings.count)").monospacedDigit()
                 }
-                .width(min: 40, ideal: 50)
+                .width(min: Self.foundWidth, ideal: Self.foundWidth, max: Self.foundWidth + 24)
             }
             .contextMenu(forSelectionType: UUID.self) { ids in
                 Button(ids.count > 1 ? "Delete \(ids.count) Results…" : "Delete Result…") { confirmDelete(ids) }
