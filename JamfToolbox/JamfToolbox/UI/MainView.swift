@@ -5,37 +5,21 @@ struct MainView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Lives in the content, not the toolbar: a toolbar item that changes
-            // with state left the title bar undraggable until the window was resized.
-            HStack {
-                DeviceSearchField(search: model.search, deviceType: model.deviceType)
-                    .frame(width: 320)
-                Spacer()
-                Picker("Device type", selection: deviceTypeBinding) {
-                    Text("Computers").tag(DeviceType.computer)
-                    Text("Mobile Devices").tag(DeviceType.mobile)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 260)
-                .help("Switch between your computer and mobile device lists")
-                Spacer()
-                Color.clear.frame(width: 320, height: 1)   // balances the search field so the switch centers
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            Divider()
             VSplitView {
-                DeviceTableView(entries: model.entries,
-                                columns: model.visibleColumns,
-                                selection: model.selection,
-                                sort: model.sort,
-                                reveal: model.reveal,
-                                model: model)
-                    .frame(minHeight: 160, idealHeight: 2000)
-                    .layoutPriority(1)
+                TabView(selection: $model.tab) {
+                    DeviceListTab(model: model, type: .computer)
+                        .tabItem { Text("Computers") }
+                        .tag(MainTab.computers)
+                    DeviceListTab(model: model, type: .mobile)
+                        .tabItem { Text("Mobile Devices") }
+                        .tag(MainTab.mobile)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .frame(minHeight: 220, idealHeight: 2000)
+                .layoutPriority(1)
 
-                // Opens at its minimum height; drag the divider to enlarge it.
+                // Shared by both tabs. Opens at its minimum height; drag the divider to enlarge it.
                 LogPane(model: model)
                     .frame(minHeight: 90, idealHeight: 90)
             }
@@ -43,21 +27,8 @@ struct MainView: View {
             StatusBar(log: model.log, total: model.entries.count, selected: model.selection.count)
         }
         .frame(minWidth: 860, minHeight: 460)
-        .overlay(alignment: .topLeading) { DeviceSearchDropdown(search: model.search) }
         .toolbar { toolbarContent }
         .onAppear { model.start() }
-    }
-
-    /// Switching lists changes several published properties (selection, sort,
-    /// search). The segmented control can write its binding during a view
-    /// update, which SwiftUI flags as "publishing changes from within view
-    /// updates", so hop to the next run-loop turn before changing the model.
-    private var deviceTypeBinding: Binding<DeviceType> {
-        Binding(
-            get: { model.deviceType },
-            set: { newValue in
-                DispatchQueue.main.async { model.deviceType = newValue }
-            })
     }
 
     @ToolbarContentBuilder
@@ -118,6 +89,33 @@ struct MainView: View {
             }
             .help("Settings (⌘,)")
         }
+    }
+}
+
+/// One device tab: its own search field, table, selection and sort.
+private struct DeviceListTab: View {
+    @ObservedObject var model: AppModel
+    let type: DeviceType
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                DeviceSearchField(search: model.search(for: type), deviceType: type)
+                    .frame(width: 320)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
+            DeviceTableView(entries: model.entries(for: type),
+                            columns: model.visibleColumns,
+                            selection: model.selection(for: type),
+                            sort: model.sort(for: type),
+                            reveal: model.reveal(for: type),
+                            type: type,
+                            model: model)
+        }
+        .overlay(alignment: .topLeading) { DeviceSearchDropdown(search: model.search(for: type)) }
     }
 }
 

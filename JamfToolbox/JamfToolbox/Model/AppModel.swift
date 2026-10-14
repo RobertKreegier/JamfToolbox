@@ -10,6 +10,14 @@ struct DeviceRef: Hashable {
     let type: DeviceType
 }
 
+/// The main window's tabs.
+enum MainTab: Hashable {
+    case computers
+    case mobile
+
+    var deviceType: DeviceType { self == .mobile ? .mobile : .computer }
+}
+
 struct SortState: Equatable {
     var field: ColumnField
     var ascending: Bool
@@ -30,19 +38,50 @@ final class AppModel: ObservableObject {
 
     let settings: SettingsStore
     let log = ActivityLog()
-    let search = DeviceSearch()
+    /// One search field per device tab.
+    let searches: [DeviceType: DeviceSearch] = [
+        .computer: DeviceSearch(type: .computer),
+        .mobile: DeviceSearch(type: .mobile),
+    ]
 
-    @Published var deviceType: DeviceType = .computer {
+    @Published var tab: MainTab = .computers {
         didSet {
-            guard oldValue != deviceType else { return }
-            selection = []
-            sort = nil
-            search.reset()
+            guard oldValue != tab else { return }
+            // An open dropdown belongs to the tab being left.
+            for search in searches.values { search.dismiss() }
         }
     }
-    @Published var selection: Set<String> = []
-    @Published private(set) var sort: SortState?
-    @Published private(set) var reveal: RevealRequest?
+
+    // Each tab keeps its own selection, sort and scroll request, so switching
+    // tabs and back leaves everything as it was.
+    @Published private var selections: [DeviceType: Set<String>] = [:]
+    @Published private var sorts: [DeviceType: SortState] = [:]
+    @Published private var reveals: [DeviceType: RevealRequest] = [:]
+
+    /// The device type of the visible tab. Menus, the toolbar and every action
+    /// act on this list.
+    var deviceType: DeviceType {
+        get { tab.deviceType }
+        set { tab = newValue == .mobile ? .mobile : .computers }
+    }
+
+    func selection(for type: DeviceType) -> Set<String> { selections[type] ?? [] }
+
+    func setSelection(_ ids: Set<String>, for type: DeviceType) {
+        if selection(for: type) != ids { selections[type] = ids }
+    }
+
+    func sort(for type: DeviceType) -> SortState? { sorts[type] }
+    func reveal(for type: DeviceType) -> RevealRequest? { reveals[type] }
+    func search(for type: DeviceType) -> DeviceSearch { searches[type]! }
+
+    /// Shorthands for the visible tab.
+    var selection: Set<String> {
+        get { selection(for: deviceType) }
+        set { setSelection(newValue, for: deviceType) }
+    }
+    var sort: SortState? { sorts[deviceType] }
+    var search: DeviceSearch { search(for: deviceType) }
 
     private(set) var client: JamfClient?
     var apNames: [String: [String: String]] = [:]   // Meraki network id → AP MAC → name
@@ -64,7 +103,7 @@ final class AppModel: ObservableObject {
         settingsObserver = settings.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
-        search.model = self
+        for search in searches.values { search.model = self }
         rebuildClient()
     }
 
@@ -147,7 +186,8 @@ final class AppModel: ObservableObject {
 
     // MARK: Working lists
 
-    var entries: [DeviceEntry] { settings.prefs.deviceList(for: deviceType) }
+    func entries(for type: DeviceType) -> [DeviceEntry] { settings.prefs.deviceList(for: type) }
+    var entries: [DeviceEntry] { entries(for: deviceType) }
     var visibleColumns: [ColumnField] { settings.prefs.visibleColumns }
 
     /// Selected entries, in list order.
@@ -170,9 +210,9 @@ final class AppModel: ObservableObject {
     /// ⌘N and the + button: jump to the search field.
     func openAddDialog() { search.focus() }
 
-    func selectAndReveal(_ id: String) {
-        selection = [id]
-        reveal = RevealRequest(id: id)
+    func selectAndReveal(_ id: String, in type: DeviceType) {
+        setSelection([id], for: type)
+        reveals[type] = RevealRequest(id: id)
     }
 
     func addEntries(_ new: [DeviceEntry], type: DeviceType) {
@@ -281,15 +321,17 @@ final class AppModel: ObservableObject {
         }
         settings.prefs.setDeviceList(list, for: deviceType)
         persist()
-        sort = nil   // a manual order overrides any column sort
-        if let target = list.first(where: { chosen.contains($0.id) }) { reveal = RevealRequest(id: target.id) }
+        sorts[deviceType] = nil   // a manual order overrides any column sort
+        if let target = list.first(where: { chosen.contains($0.id) }) { reveals[deviceType] = RevealRequest(id: target.id) }
     }
 
-    /// Sort the current list by a column. The new order is saved, like manual moves.
-    func sortBy(_ field: ColumnField, ascending: Bool) {
-        var list = entries
+    /// Sort a list by a column (the visible one unless `type` is given).
+    /// The new order is saved, like manual moves.
+    func sortBy(_ field: ColumnField, ascending: Bool, type: DeviceType? = nil) {
+        let type = type ?? deviceType
+        var list = entries(for: type)
         guard !list.isEmpty else { return }
-        sort = SortState(field: field, ascending: ascending)
+        sorts[type] = SortState(field: field, ascending: ascending)
 
         func key(_ entry: DeviceEntry) -> (rank: Int, octets: [Int], text: String) {
             let value = entry.value(field)
@@ -311,7 +353,7 @@ final class AppModel: ObservableObject {
             if a.rank == 2 || b.rank == 2 { return a.rank < b.rank }   // blanks stay last either way
             return ascending ? less(a, b) : less(b, a)
         }
-        settings.prefs.setDeviceList(list, for: deviceType)
+        settings.prefs.setDeviceList(list, for: type)
         persist()
     }
 
@@ -321,7 +363,7 @@ final class AppModel: ObservableObject {
         let valid = columns.isEmpty ? ColumnField.defaults : columns
         guard valid.map(\.rawValue) != settings.prefs.listColumns else { return }
         settings.prefs.listColumns = valid.map(\.rawValue)
-        sort = nil
+        sorts = [:]   // columns are shared by both tabs
         persist()
     }
 

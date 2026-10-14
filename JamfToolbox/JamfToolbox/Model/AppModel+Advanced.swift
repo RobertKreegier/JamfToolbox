@@ -123,7 +123,7 @@ extension AppModel {
             try await client.deleteDevice(type: type, id: device.id)
         }, onSuccess: {
             self.mutateList(type) { $0.removeAll { $0.id == device.id } }
-            self.selection = []
+            self.setSelection([], for: type)
         })
     }
 }
