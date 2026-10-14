@@ -72,7 +72,7 @@ private let helpSections: [HelpSection] = [
             + "Toggle Lost Mode, Lock Device, Rename Device, or Open in Jamf Pro; the menu shows how many are "
             + "selected. Each shows exactly what will happen before anything is sent, runs one device at a "
             + "time with a progress sheet you can cancel, and logs a per-device result plus a summary. Bulk "
-            + "rename uses the type's default template; bulk Lost Mode asks once whether to enable or "
+            + "rename asks which name format to use; bulk Lost Mode asks once whether to enable or "
             + "disable and applies that to every selected device; bulk locking a Mac uses one PIN for the "
             + "whole batch.",
         "Actions: right-click a device and choose an action from the top of the menu, or use the Device menu. "
@@ -121,10 +121,11 @@ private let helpSections: [HelpSection] = [
         "Toggle Lost Mode checks whether Lost Mode is currently on for the selected device and offers the "
             + "opposite action: it previews your message before enabling, and simply confirms before turning "
             + "it off. Supervised mobile devices only.",
-        "Message presets: Settings > Templates holds any number of Lost Mode messages (each with its own "
-            + "phone and footnote) and lock messages. Use + and − to add and remove them, and Make Default to "
-            + "choose the one used when previews are off. When you enable Lost Mode or lock a device, pick a "
-            + "preset at the top of the preview and edit the text if needed; bulk actions ask once for the "
+        "Presets: Settings > Templates holds any number of device-name formats, Lost Mode messages (each "
+            + "with its own phone and footnote) and lock messages. Any name format can be used for computers or "
+            + "mobile devices. Use + and − to add and remove them, and Make Default to "
+            + "choose the one used when previews are off. When you rename, enable Lost Mode or lock a device, "
+            + "pick a preset at the top of the preview and edit the text if needed; bulk actions ask once for the "
             + "whole batch and fill in each device's {tags}. Locked mobile devices show the message on their "
             + "lock screen.",
         "Rename sends the Set Device Name command through Jamf Pro's modern MDM commands API for mobile "
