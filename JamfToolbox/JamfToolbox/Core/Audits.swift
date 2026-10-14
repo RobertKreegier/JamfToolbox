@@ -100,6 +100,12 @@ enum StaticGroupDependencyAudit {
         var onlySmartGroups = false // for group resources: static groups can't reference others
     }
 
+    /// Jamf Pro page for an object type, looked up when a link is opened so
+    /// results saved before a page name was corrected still open correctly.
+    static func webPage(forObjectType label: String) -> String? {
+        objectTypes.first { $0.label == label }?.webPage
+    }
+
     /// "2 policies, 1 smart computer group": lower-case forms keyed by label.
     static func describeCounts(_ counts: [String: Int]) -> String {
         objectTypes.compactMap { type in
@@ -126,7 +132,7 @@ enum StaticGroupDependencyAudit {
                    webPage: "advancedComputerSearches.html", kinds: [.computer]),
         ObjectType(label: "Mobile Device Configuration Profile", plural: "mobile device configuration profiles",
                    resource: "mobiledeviceconfigurationprofiles", usesScopeSubset: true,
-                   webPage: "mobileDeviceConfigurationProfiles.html", kinds: [.mobile]),
+                   webPage: "iOSConfigurationProfiles.html", kinds: [.mobile]),
         ObjectType(label: "Mobile Device App", plural: "mobile device apps", resource: "mobiledeviceapplications",
                    usesScopeSubset: true, webPage: "mobileDeviceApps.html", kinds: [.mobile]),
         ObjectType(label: "eBook", plural: "eBooks", resource: "ebooks", usesScopeSubset: true,

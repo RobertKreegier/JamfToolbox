@@ -299,7 +299,7 @@ private struct AuditResultView: View {
 
     private func open(_ ids: Set<AuditFinding.ID>) {
         for finding in findings(ids) {
-            guard let page = finding.webPage,
+            guard let page = StaticGroupDependencyAudit.webPage(forObjectType: finding.objectType) ?? finding.webPage,
                   let url = URL(string: "\(result.server)/\(page)?id=\(finding.objectID)&o=r") else { continue }
             NSWorkspace.shared.open(url)
         }
