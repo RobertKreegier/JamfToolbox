@@ -130,7 +130,6 @@ private struct NewAuditView: View {
                     ForEach(AuditReports.reports(in: center.category)) { Text($0.title).tag($0.id) }
                 }
                 Text(report.summary)
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -337,6 +336,13 @@ private struct AuditResultView: View {
                  + "\(result.objectsScanned) checked")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            // A reminder of what the report checks.
+            if let summary = AuditReports.report(result.reportID)?.summary {
+                Text(summary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
         }
     }
 
