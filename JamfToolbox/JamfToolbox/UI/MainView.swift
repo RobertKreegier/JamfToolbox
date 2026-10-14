@@ -3,32 +3,51 @@ import SwiftUI
 struct MainView: View {
     @ObservedObject var model: AppModel
 
+    @AppStorage("activityLogHeight") private var logHeight = Double(Self.minLogHeight)
+    @State private var dragStartHeight: Double?
+
+    private static let minLogHeight: CGFloat = 90
+    private static let minTabsHeight: CGFloat = 220
+
     var body: some View {
         VStack(spacing: 0) {
-            VSplitView {
-                TabView(selection: $model.tab) {
-                    DeviceListTab(model: model, type: .computer)
-                        .tabItem { Text("Computers") }
-                        .tag(MainTab.computers)
-                    DeviceListTab(model: model, type: .mobile)
-                        .tabItem { Text("Mobile Devices") }
-                        .tag(MainTab.mobile)
-                }
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-                .frame(minHeight: 220, idealHeight: 2000)
-                .layoutPriority(1)
+            // A plain stack with a hand-made divider rather than VSplitView:
+            // AppKit's split view lays its panes out with a negative width on
+            // first display, which logs "Invalid view geometry" warnings.
+            GeometryReader { geometry in
+                let maxLog = max(Self.minLogHeight, geometry.size.height - Self.minTabsHeight - 7)
+                VStack(spacing: 0) {
+                    MainTabs(model: model)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 8)
+                        .frame(minHeight: Self.minTabsHeight)
 
-                // Shared by both tabs. Opens at its minimum height; drag the divider to enlarge it.
-                LogPane(model: model)
-                    .frame(minHeight: 90, idealHeight: 90)
+                    LogResizeHandle()
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { drag in
+                                let start = dragStartHeight ?? logHeight
+                                dragStartHeight = start
+                                logHeight = min(max(start - drag.translation.height, Self.minLogHeight), maxLog)
+                            }
+                            .onEnded { _ in dragStartHeight = nil })
+
+                    // Shared by every tab. Opens at its minimum height; drag the divider to enlarge it.
+                    LogPane(model: model)
+                        .frame(height: min(max(CGFloat(logHeight), Self.minLogHeight), maxLog))
+                }
             }
             Divider()
-            StatusBar(log: model.log, total: model.entries.count, selected: model.selection.count)
+            StatusBar(log: model.log, audits: model.audits, showingDevices: model.showingDevices,
+                      deviceSummary: deviceSummary)
         }
         .frame(minWidth: 860, minHeight: 460)
         .toolbar { toolbarContent }
         .onAppear { model.start() }
+    }
+
+    private var deviceSummary: String {
+        let total = model.entries.count, selected = model.selection.count
+        return selected > 0 ? "\(selected) of \(total) selected" : "\(total) device\(total == 1 ? "" : "s")"
     }
 
     @ToolbarContentBuilder
@@ -39,7 +58,7 @@ struct MainView: View {
             Button { Task { await model.refreshList() } } label: {
                 Label("Refresh Info", systemImage: "arrow.clockwise")
             }
-            .disabled(model.entries.isEmpty)
+            .disabled(!model.showingDevices || model.entries.isEmpty)
             .help("Re-read every device in the list from Jamf Pro (⌘R)")
         }
 
@@ -47,19 +66,19 @@ struct MainView: View {
             Button { model.moveSelected(-1) } label: {
                 Label("Move Up", systemImage: "chevron.up")
             }
-            .disabled(model.selection.isEmpty)
+            .disabled(!model.showingDevices || model.selection.isEmpty)
             .help("Move the selected devices up (⌘↑)")
 
             Button { model.moveSelected(1) } label: {
                 Label("Move Down", systemImage: "chevron.down")
             }
-            .disabled(model.selection.isEmpty)
+            .disabled(!model.showingDevices || model.selection.isEmpty)
             .help("Move the selected devices down (⌘↓)")
 
             Button { Task { await model.exportList() } } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
-            .disabled(model.entries.isEmpty)
+            .disabled(!model.showingDevices || model.entries.isEmpty)
             .help("Export the list to CSV or Excel (⌘E)")
 
             Menu {
@@ -82,6 +101,7 @@ struct MainView: View {
             } label: {
                 Label("Actions", systemImage: "ellipsis.circle")
             }
+            .disabled(!model.showingDevices)
             .help("Actions for the selected device")
 
             Button { model.openSettings() } label: {
@@ -89,6 +109,74 @@ struct MainView: View {
             }
             .help("Settings (⌘,)")
         }
+    }
+}
+
+/// The tab strip and the selected tab's content.
+///
+/// Drawn by hand rather than with `TabView`: on macOS the bordered `TabView`
+/// is an `NSTabView` that lays itself out before it has a size, logging
+/// "Invalid view geometry: width is negative", and newer macOS versions move
+/// an unbordered `TabView` into the title bar. This keeps the look stable.
+private struct MainTabs: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            content
+                .padding(.top, 14)   // clear the tab strip
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.top, 11)   // the box's top edge runs through the middle of the strip
+
+            Picker("Tab", selection: tabBinding) {
+                Text("Computers").tag(MainTab.computers)
+                Text("Mobile Devices").tag(MainTab.mobile)
+                Text("Jamf Audits").tag(MainTab.audits)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    /// The segmented control writes its value while SwiftUI is still updating
+    /// views; changing the model then (it swaps the whole tab's content) logs
+    /// "Publishing changes from within view updates". Apply it on the next
+    /// run-loop turn instead.
+    private var tabBinding: Binding<MainTab> {
+        Binding(
+            get: { model.tab },
+            set: { newValue in
+                DispatchQueue.main.async { model.tab = newValue }
+            })
+    }
+
+    /// Only the selected tab exists, so a hidden table can never hold keyboard
+    /// focus. Selection, sort and search for each list live in the model and
+    /// survive switching.
+    @ViewBuilder
+    private var content: some View {
+        switch model.tab {
+        case .computers: DeviceListTab(model: model, type: .computer)
+        case .mobile: DeviceListTab(model: model, type: .mobile)
+        case .audits: AuditsTab(center: model.audits)
+        }
+    }
+}
+
+/// The divider above the Activity log: a hairline with a taller grab area
+/// and the up/down resize cursor.
+private struct LogResizeHandle: View {
+    var body: some View {
+        Divider()
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+            }
+            .help("Drag to resize the Activity log")
     }
 }
 
@@ -147,8 +235,16 @@ private struct LogPane: View {
 
 private struct StatusBar: View {
     @ObservedObject var log: ActivityLog
-    let total: Int
-    let selected: Int
+    /// Observed directly so the saved-result count stays current on the Audits tab.
+    @ObservedObject var audits: AuditCenter
+    let showingDevices: Bool
+    let deviceSummary: String
+
+    private var summary: String {
+        guard !showingDevices else { return deviceSummary }
+        let count = audits.results.count
+        return "\(count) saved result\(count == 1 ? "" : "s")"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -157,7 +253,7 @@ private struct StatusBar: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
-            Text(selected > 0 ? "\(selected) of \(total) selected" : "\(total) device\(total == 1 ? "" : "s")")
+            Text(summary)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }

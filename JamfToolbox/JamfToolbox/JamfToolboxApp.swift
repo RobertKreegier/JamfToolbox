@@ -33,13 +33,13 @@ struct ToolboxCommands: Commands {
                 .keyboardShortcut("n")
             Button("Refresh Info") { Task { await model.refreshList() } }
                 .keyboardShortcut("r")
-                .disabled(model.entries.isEmpty)
+                .disabled(!model.showingDevices || model.entries.isEmpty)
             Divider()
             Button("Remove from List") { Task { await model.removeSelected() } }
-                .disabled(model.selection.isEmpty)
+                .disabled(!model.showingDevices || model.selection.isEmpty)
             Button("Export…") { Task { await model.exportList() } }
                 .keyboardShortcut("e")
-                .disabled(model.entries.isEmpty)
+                .disabled(!model.showingDevices || model.entries.isEmpty)
         }
 
         // Every action lives here too, so the whole app is reachable from the

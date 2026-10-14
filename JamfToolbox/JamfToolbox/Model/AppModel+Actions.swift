@@ -5,7 +5,7 @@ extension AppModel {
     // MARK: Dispatch
 
     func canPerform(_ action: DeviceAction) -> Bool {
-        guard action.isAvailable(for: deviceType) else { return false }
+        guard showingDevices, action.isAvailable(for: deviceType) else { return false }
         if selection.count > 1 { return action.supportsBulk }
         return true
     }
