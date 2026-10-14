@@ -110,10 +110,28 @@ extension AppModel {
     }
 
     /// Ask the user to review/edit values; returns trimmed values keyed by label.
-    func askPreview(title: String, intro: String, fields: [PreviewField],
-                    confirm: String) async -> [String: String]? {
+    func askPreview(title: String, intro: String, fields: [PreviewField], confirm: String,
+                    presets: [PreviewPreset] = [], presetLabel: String = "Preset") async -> [String: String]? {
         await Sheets.present { done in
-            PreviewSheet(title: title, intro: intro, confirmLabel: confirm, fields: fields, done: done)
+            PreviewSheet(title: title, intro: intro, confirmLabel: confirm, fields: fields,
+                         presets: presets, presetLabel: presetLabel, done: done)
+        }
+    }
+
+    /// Saved Lost Mode presets rendered for one device, for the preview's picker.
+    func lostModePreviewPresets(_ tags: TagValues) -> [PreviewPreset] {
+        settings.prefs.lostModePresets.map { preset in
+            PreviewPreset(name: preset.name, values: ["Message": Templates.render(preset.message, tags),
+                                                      "Phone": Templates.render(preset.phone, tags),
+                                                      "Footnote": Templates.render(preset.footnote, tags)])
+        }
+    }
+
+    /// Saved lock messages rendered for one device (or left as templates when `tags` is nil).
+    func lockPreviewPresets(_ tags: TagValues?) -> [PreviewPreset] {
+        settings.prefs.lockPresets.map { preset in
+            PreviewPreset(name: preset.name,
+                          values: ["Lock message": tags.map { Templates.render(preset.message, $0) } ?? preset.message])
         }
     }
 
@@ -202,9 +220,10 @@ extension AppModel {
 
     private func enableLostMode(_ device: DeviceRef, tags: TagValues, client: JamfClient) async {
         let prefs = settings.prefs
-        var message = Templates.render(prefs.lostModeMessage, tags)
-        var phone = Templates.render(prefs.lostModePhone, tags)
-        var footnote = Templates.render(prefs.lostModeFootnote, tags)
+        let presets = lostModePreviewPresets(tags)
+        var message = presets[0].values["Message"] ?? ""   // the default preset
+        var phone = presets[0].values["Phone"] ?? ""
+        var footnote = presets[0].values["Footnote"] ?? ""
         let sound = prefs.lostModeSound
 
         if prefs.verifyNotes {
@@ -215,7 +234,7 @@ extension AppModel {
                 fields: [PreviewField(label: "Message", value: message, multiline: true),
                          PreviewField(label: "Phone", value: phone),
                          PreviewField(label: "Footnote", value: footnote)],
-                confirm: "Enable Lost Mode") else {
+                confirm: "Enable Lost Mode", presets: presets) else {
                 log.add("Enable Lost Mode cancelled.")
                 return
             }
@@ -243,19 +262,26 @@ extension AppModel {
     func actionLock() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let (_, tags) = await loadRecord(device, client: client) else { return }
-        let message = Templates.render(settings.prefs.lockMessage, tags)
+        let presets = lockPreviewPresets(tags)
+        let message = presets[0].values["Lock message"] ?? ""   // the default preset
 
         if device.type == .mobile {
             // The mobile DeviceLock command takes no PIN: the device locks
-            // immediately with its existing passcode.
-            guard await Dialogs.confirm(
-                "Lock “\(device.name)” now?\n\nThe device will lock with its existing passcode "
-                + "(mobile device locks do not use a PIN). If the device has no passcode, it can be "
-                + "unlocked with a swipe.", yes: "Lock", no: "Cancel") else {
+            // immediately with its existing passcode, showing the message.
+            guard let result = await askPreview(
+                title: "Lock device",
+                intro: "Lock “\(device.name)” now? It locks with its existing passcode (mobile device locks don't "
+                    + "use a PIN); if it has no passcode, it can be unlocked with a swipe. The message shows on "
+                    + "its lock screen.",
+                fields: [PreviewField(label: "Lock message", value: message, multiline: true)],
+                confirm: "Lock", presets: presets) else {
                 log.add("Lock cancelled.")
                 return
             }
-            await send("Lock \(device.name)", work: { try await client.lockMobileDevice(id: device.id) })
+            let lockMessage = result["Lock message"] ?? ""
+            await send("Lock \(device.name)", work: {
+                try await client.lockMobileDevice(id: device.id, message: lockMessage)
+            })
             return
         }
 
@@ -264,7 +290,7 @@ extension AppModel {
             intro: "Lock “\(device.name)”. The PIN below will be required to unlock it — record it before continuing.",
             fields: [PreviewField(label: "6-digit PIN", value: ""),
                      PreviewField(label: "Lock message", value: message, multiline: true)],
-            confirm: "Lock") else {
+            confirm: "Lock", presets: presets) else {
             log.add("Lock cancelled.")
             return
         }

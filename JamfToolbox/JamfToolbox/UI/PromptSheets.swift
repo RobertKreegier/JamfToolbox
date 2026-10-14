@@ -9,15 +9,33 @@ struct PreviewField: Identifiable {
     var multiline = false
 }
 
+/// A named set of field values the user can switch to (a saved message preset).
+struct PreviewPreset {
+    let name: String
+    /// Field label → value, already rendered for the device.
+    let values: [String: String]
+}
+
 /// Shows the rendered template (message, name, PIN…) for review and editing
 /// before anything is sent. Returns the trimmed values keyed by field label,
-/// or nil when cancelled.
+/// or nil when cancelled. When presets are given, a picker at the top swaps
+/// their values into the fields (which stay editable).
 struct PreviewSheet: View {
     let title: String
     let intro: String
     let confirmLabel: String
     @State var fields: [PreviewField]
+    var presets: [PreviewPreset] = []
+    var presetLabel = "Preset"
+    @State var selectedPreset = 0
     let done: ([String: String]?) -> Void
+
+    private func apply(_ index: Int) {
+        guard presets.indices.contains(index) else { return }
+        for i in fields.indices {
+            if let value = presets[index].values[fields[i].label] { fields[i].value = value }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -27,6 +45,18 @@ struct PreviewSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Grid(alignment: .topLeading, horizontalSpacing: 10, verticalSpacing: 10) {
+                if presets.count > 1 {
+                    GridRow {
+                        Text(presetLabel).gridColumnAlignment(.trailing)
+                        Picker(presetLabel, selection: $selectedPreset) {
+                            ForEach(presets.indices, id: \.self) { index in
+                                Text(presets[index].name + (index == 0 ? " (default)" : "")).tag(index)
+                            }
+                        }
+                        .labelsHidden()
+                        .onChange(of: selectedPreset) { apply($0) }
+                    }
+                }
                 ForEach($fields) { $field in
                     GridRow {
                         Text(field.label)
@@ -57,6 +87,47 @@ struct PreviewSheet: View {
                     done(result)
                 }
                 .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 500)
+    }
+}
+
+// MARK: - Choose one of several presets
+
+/// Pick one saved preset before a bulk action. Returns its index, or nil when cancelled.
+struct PresetChoiceSheet: View {
+    let title: String
+    let intro: String
+    /// Name and template text of each preset; the first is the default.
+    let options: [(name: String, text: String)]
+    let confirmLabel: String
+    let done: (Int?) -> Void
+    @State private var selection = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            Text(intro).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Picker("Preset", selection: $selection) {
+                ForEach(options.indices, id: \.self) { index in
+                    Text(options[index].name + (index == 0 ? " (default)" : "")).tag(index)
+                }
+            }
+            Text(options.indices.contains(selection) ? options[selection].text : "")
+                .font(.callout)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+            HStack {
+                Spacer()
+                Button("Cancel") { done(nil) }
+                    .keyboardShortcut(.cancelAction)
+                Button(confirmLabel) { done(selection) }
+                    .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
@@ -170,7 +241,9 @@ struct ProgressSheet: View {
                  intro: "Lock “MBP-ARIVERA”. The PIN below will be required to unlock it — record it before continuing.",
                  confirmLabel: "Lock",
                  fields: [PreviewField(label: "6-digit PIN", value: ""),
-                          PreviewField(label: "Lock message", value: Preferences().lockMessage, multiline: true)],
+                          PreviewField(label: "Lock message", value: Preferences().defaultLock.message, multiline: true)],
+                 presets: [PreviewPreset(name: "Default", values: ["Lock message": Preferences().defaultLock.message]),
+                           PreviewPreset(name: "Stolen", values: ["Lock message": "Reported stolen. Call 555-0100."])],
                  done: { _ in })
 }
 

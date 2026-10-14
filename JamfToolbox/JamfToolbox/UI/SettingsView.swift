@@ -16,13 +16,11 @@ struct SettingsDraft: Equatable {
     var doubleClickAction = DeviceAction.openInJamf
     var sslVerify = true
     var caBundle = ""
-    var lostModeMessage = ""
-    var lostModePhone = ""
-    var lostModeFootnote = ""
+    var lostModePresets: [LostModePreset] = Preferences().lostModePresets
     var lostModeSound = true
     var renameComputer = ""
     var renameMobile = ""
-    var lockMessage = ""
+    var lockPresets: [LockPreset] = Preferences().lockPresets
     var merakiKey = ""
 
     @MainActor
@@ -38,13 +36,11 @@ struct SettingsDraft: Equatable {
         doubleClickAction = p.doubleClickAction
         sslVerify = p.sslVerify
         caBundle = p.sslCABundle
-        lostModeMessage = p.lostModeMessage
-        lostModePhone = p.lostModePhone
-        lostModeFootnote = p.lostModeFootnote
+        lostModePresets = p.lostModePresets
         lostModeSound = p.lostModeSound
         renameComputer = p.renameFormatComputer
         renameMobile = p.renameFormatMobile
-        lockMessage = p.lockMessage
+        lockPresets = p.lockPresets
         merakiKey = settings.secret("meraki_api_key")
     }
 
@@ -89,6 +85,8 @@ struct SettingsView: View {
     @State private var loaded = SettingsDraft()
     @State private var window: NSWindow?
     @State private var testing = false
+    @State private var lostSelection: UUID?
+    @State private var lockSelection: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -126,6 +124,8 @@ struct SettingsView: View {
         let fresh = SettingsDraft(settings: model.settings)
         draft = fresh
         loaded = fresh
+        lostSelection = fresh.lostModePresets.first?.id
+        lockSelection = fresh.lockPresets.first?.id
     }
 
     // MARK: Panes
@@ -180,11 +180,46 @@ struct SettingsView: View {
 
     private var templatesPane: some View {
         Form {
-            Section("Lost Mode") {
-                messageEditor("Message", text: $draft.lostModeMessage, height: 56)
-                TextField("Phone", text: $draft.lostModePhone)
-                TextField("Footnote", text: $draft.lostModeFootnote)
+            Section {
+                presetControls(names: draft.lostModePresets.map(\.name), ids: draft.lostModePresets.map(\.id),
+                               selection: $lostSelection,
+                               add: {
+                                   let new = LostModePreset(name: "New Message", message: "", footnote: draft.lostModePresets[0].footnote)
+                                   draft.lostModePresets.append(new)
+                                   lostSelection = new.id
+                               },
+                               remove: { index in draft.lostModePresets.remove(at: index); lostSelection = draft.lostModePresets.first?.id },
+                               makeDefault: { index in draft.lostModePresets.insert(draft.lostModePresets.remove(at: index), at: 0) })
+                let i = index(of: lostSelection, in: draft.lostModePresets.map(\.id))
+                TextField("Name", text: $draft.lostModePresets[i].name)
+                messageEditor("Message", text: $draft.lostModePresets[i].message, height: 56)
+                TextField("Phone", text: $draft.lostModePresets[i].phone)
+                TextField("Footnote", text: $draft.lostModePresets[i].footnote)
                 Toggle("Play a sound when Lost Mode is enabled", isOn: $draft.lostModeSound)
+            } header: {
+                Text("Lost Mode Messages")
+            } footer: {
+                Text("The default message is used when previews are off. Otherwise you choose one when enabling Lost Mode.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                presetControls(names: draft.lockPresets.map(\.name), ids: draft.lockPresets.map(\.id),
+                               selection: $lockSelection,
+                               add: {
+                                   let new = LockPreset(name: "New Message", message: "")
+                                   draft.lockPresets.append(new)
+                                   lockSelection = new.id
+                               },
+                               remove: { index in draft.lockPresets.remove(at: index); lockSelection = draft.lockPresets.first?.id },
+                               makeDefault: { index in draft.lockPresets.insert(draft.lockPresets.remove(at: index), at: 0) })
+                let i = index(of: lockSelection, in: draft.lockPresets.map(\.id))
+                TextField("Name", text: $draft.lockPresets[i].name)
+                messageEditor("Message", text: $draft.lockPresets[i].message, height: 56)
+            } header: {
+                Text("Lock Messages")
+            } footer: {
+                Text("Shown on the lock screen of locked Macs and mobile devices. You choose one when locking.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Rename") {
                 TextField("Computers", text: $draft.renameComputer)
@@ -193,14 +228,38 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Lock") {
-                messageEditor("Message", text: $draft.lockMessage, height: 56)
-            }
             Section {
                 Text("Templates accept {tags}. Choose Jamf Toolbox Help from the Help menu for the full list.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// The selected preset's position (the first preset when nothing valid is selected).
+    private func index(of id: UUID?, in ids: [UUID]) -> Int {
+        id.flatMap { ids.firstIndex(of: $0) } ?? 0
+    }
+
+    /// Picker of saved presets with Add, Delete and Make Default.
+    private func presetControls(names: [String], ids: [UUID], selection: Binding<UUID?>,
+                                add: @escaping () -> Void, remove: @escaping (Int) -> Void,
+                                makeDefault: @escaping (Int) -> Void) -> some View {
+        let current = index(of: selection.wrappedValue, in: ids)
+        return HStack {
+            Picker("Preset", selection: Binding(get: { ids.indices.contains(current) ? ids[current] : nil },
+                                                 set: { selection.wrappedValue = $0 })) {
+                ForEach(ids.indices, id: \.self) { i in
+                    Text((names[i].isEmpty ? "Untitled" : names[i]) + (i == 0 ? " (default)" : "")).tag(Optional(ids[i]))
+                }
+            }
+            Button(action: add) { Image(systemName: "plus") }
+                .help("Add a message")
+            Button { remove(current) } label: { Image(systemName: "minus") }
+                .help("Delete this message")
+                .disabled(ids.count <= 1)
+            Button("Make Default") { makeDefault(current) }
+                .disabled(current == 0)
         }
     }
 
@@ -321,13 +380,27 @@ struct SettingsView: View {
         p.doubleClickAction = draft.doubleClickAction
         p.sslVerify = draft.sslVerify
         p.sslCABundle = draft.caBundle.trimmingCharacters(in: .whitespaces)
-        p.lostModeMessage = draft.lostModeMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        p.lostModePhone = draft.lostModePhone.trimmingCharacters(in: .whitespaces)
-        p.lostModeFootnote = draft.lostModeFootnote.trimmingCharacters(in: .whitespaces)
+        func cleanName(_ name: String) -> String {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Untitled" : trimmed
+        }
+        p.lostModePresets = draft.lostModePresets.map { preset in
+            var clean = preset
+            clean.name = cleanName(preset.name)
+            clean.message = preset.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            clean.phone = preset.phone.trimmingCharacters(in: .whitespaces)
+            clean.footnote = preset.footnote.trimmingCharacters(in: .whitespaces)
+            return clean
+        }
         p.lostModeSound = draft.lostModeSound
         p.renameFormatComputer = draft.renameComputer.trimmingCharacters(in: .whitespaces)
         p.renameFormatMobile = draft.renameMobile.trimmingCharacters(in: .whitespaces)
-        p.lockMessage = draft.lockMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        p.lockPresets = draft.lockPresets.map { preset in
+            var clean = preset
+            clean.name = cleanName(preset.name)
+            clean.message = preset.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean
+        }
         settings.prefs = p
 
         // Only touch the Keychain for secrets the user actually changed.

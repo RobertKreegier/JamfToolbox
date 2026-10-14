@@ -159,7 +159,13 @@ extension AppModel {
         if choice == 0 {
             let prefs = settings.prefs
             let sound = prefs.lostModeSound
-            let lines = capped(targets.map { "\($0.0.name)  →  \(Templates.render(prefs.lostModeMessage, $0.1))" })
+            guard let preset = await choosePreset(
+                title: "Enable Lost Mode", intro: "Which Lost Mode message should the \(targets.count) device(s) show?",
+                options: prefs.lostModePresets.map { ($0.name, $0.message) }).map({ prefs.lostModePresets[$0] }) else {
+                log.add("Bulk Enable Lost Mode cancelled.")
+                return
+            }
+            let lines = capped(targets.map { "\($0.0.name)  →  \(Templates.render(preset.message, $0.1))" })
             let confirmed = await Sheets.present { done in
                 BulkConfirmSheet(
                     title: "Enable Lost Mode",
@@ -179,9 +185,9 @@ extension AppModel {
                 let tags = tagsByID[device.id] ?? [:]
                 return try await client.enableLostMode(
                     id: device.id,
-                    message: Templates.render(prefs.lostModeMessage, tags),
-                    phone: Templates.render(prefs.lostModePhone, tags),
-                    footnote: Templates.render(prefs.lostModeFootnote, tags),
+                    message: Templates.render(preset.message, tags),
+                    phone: Templates.render(preset.phone, tags),
+                    footnote: Templates.render(preset.footnote, tags),
                     playSound: sound)
             }
         } else {
@@ -204,36 +210,60 @@ extension AppModel {
         }
     }
 
+    /// With several saved presets, ask which one to use; with one, use it.
+    /// Returns the chosen index, or nil when cancelled.
+    private func choosePreset(title: String, intro: String, options: [(String, String)]) async -> Int? {
+        guard options.count > 1 else { return 0 }
+        return await Sheets.present { done in
+            PresetChoiceSheet(title: title, intro: intro, options: options.map { (name: $0.0, text: $0.1) },
+                              confirmLabel: "Continue", done: done)
+        }
+    }
+
+    /// Tag values per device, read only when the message actually uses tags.
+    /// Returns the devices that can proceed (unreadable ones are skipped and
+    /// logged) with their tags, or nil when cancelled.
+    private func tagsIfNeeded(_ template: String, devices: [DeviceRef],
+                              client: JamfClient) async -> [(device: DeviceRef, tags: TagValues)]? {
+        guard template.contains("{") else { return devices.map { ($0, [:]) } }
+        guard let gathered = await bulkPrefetch(devices, client: client) else { return nil }
+        return gathered.map { ($0.device, $0.tags) }
+    }
+
     func bulkLock() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
         guard let type = devices.first?.type else { return }
-        let lines = capped(devices.map(\.name))
+        let presets = lockPreviewPresets(nil)   // templates; rendered per device below
 
         if type == .computer {
-            let message = Templates.render(settings.prefs.lockMessage, [:])
             guard let result = await askPreview(
                 title: "Lock computers",
                 intro: "Lock \(devices.count) Mac(s). The PIN below will be required to unlock every one of "
-                    + "them — record it before continuing.",
+                    + "them — record it before continuing. {tags} in the message are filled in for each Mac.",
                 fields: [PreviewField(label: "6-digit PIN", value: ""),
-                         PreviewField(label: "Lock message", value: message, multiline: true)],
-                confirm: "Continue") else {
+                         PreviewField(label: "Lock message", value: presets[0].values["Lock message"] ?? "", multiline: true)],
+                confirm: "Continue", presets: presets) else {
                 log.add("Bulk lock cancelled.")
                 return
             }
             let pin = result["6-digit PIN"] ?? ""
-            let lockMessage = result["Lock message"] ?? message
+            let template = result["Lock message"] ?? ""
             guard pin.count == 6, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
                 await Dialogs.error("The PIN must be exactly 6 digits.")
                 return
             }
+            guard let targets = await tagsIfNeeded(template, devices: devices, client: client) else {
+                log.add("Bulk lock cancelled.")
+                return
+            }
+            let lines = capped(targets.map { "\($0.device.name)  →  \(Templates.render(template, $0.tags))" })
             let confirmed = await Sheets.present { done in
                 BulkConfirmSheet(
                     title: "Lock Computers",
-                    intro: "\(devices.count) Mac(s) will be locked immediately and will require the PIN \(pin) to unlock.",
+                    intro: "\(targets.count) Mac(s) will be locked immediately and will require the PIN \(pin) to unlock.",
                     lines: lines,
-                    confirmLabel: "Lock \(devices.count) Mac(s)",
+                    confirmLabel: "Lock \(targets.count) Mac(s)",
                     warning: "Write this PIN down now — the same PIN unlocks every device in this batch.",
                     done: done)
             }
@@ -242,25 +272,41 @@ extension AppModel {
                 return
             }
             log.add("Bulk lock PIN for this batch: \(pin)")
-            await bulkRun("Lock devices", devices: devices) { device in
-                try await client.lockComputer(id: device.id, passcode: pin, message: lockMessage)
+            let tagsByID = Dictionary(targets.map { ($0.device.id, $0.tags) }, uniquingKeysWith: { $1 })
+            await bulkRun("Lock devices", devices: targets.map(\.device)) { device in
+                try await client.lockComputer(id: device.id, passcode: pin,
+                                              message: Templates.render(template, tagsByID[device.id] ?? [:]))
             }
         } else {
+            let saved = settings.prefs.lockPresets
+            guard let preset = await choosePreset(
+                title: "Lock devices", intro: "Which lock message should the \(devices.count) device(s) show?",
+                options: saved.map { ($0.name, $0.message) }).map({ saved[$0] }),
+                  let targets = await tagsIfNeeded(preset.message, devices: devices, client: client) else {
+                log.add("Bulk lock cancelled.")
+                return
+            }
+            let lines = capped(targets.map { target in
+                let message = Templates.render(preset.message, target.tags)
+                return message.isEmpty ? target.device.name : "\(target.device.name)  →  \(message)"
+            })
             let confirmed = await Sheets.present { done in
                 BulkConfirmSheet(
                     title: "Lock Devices",
-                    intro: "\(devices.count) mobile device(s) will be locked immediately. "
-                        + "Each one locks with its existing passcode.",
+                    intro: "\(targets.count) mobile device(s) will be locked immediately. "
+                        + "Each one locks with its existing passcode and shows the message on its lock screen.",
                     lines: lines,
-                    confirmLabel: "Lock \(devices.count) Device(s)",
+                    confirmLabel: "Lock \(targets.count) Device(s)",
                     done: done)
             }
             guard confirmed else {
                 log.add("Bulk lock cancelled.")
                 return
             }
-            await bulkRun("Lock devices", devices: devices) { device in
-                try await client.lockMobileDevice(id: device.id)
+            let tagsByID = Dictionary(targets.map { ($0.device.id, $0.tags) }, uniquingKeysWith: { $1 })
+            await bulkRun("Lock devices", devices: targets.map(\.device)) { device in
+                try await client.lockMobileDevice(id: device.id,
+                                                  message: Templates.render(preset.message, tagsByID[device.id] ?? [:]))
             }
         }
     }

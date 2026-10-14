@@ -5,6 +5,50 @@ enum AuthMethod: String {
     case basic   // user account
 }
 
+/// A saved set of Lost Mode text. Fields may contain `{tags}`.
+struct LostModePreset: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
+    var message: String
+    var phone = ""
+    var footnote = ""
+
+    init(name: String, message: String, phone: String = "", footnote: String = "") {
+        self.name = name
+        self.message = message
+        self.phone = phone
+        self.footnote = footnote
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
+        message = (try? c.decode(String.self, forKey: .message)) ?? ""
+        phone = (try? c.decode(String.self, forKey: .phone)) ?? ""
+        footnote = (try? c.decode(String.self, forKey: .footnote)) ?? ""
+    }
+}
+
+/// A saved lock-screen message. May contain `{tags}`.
+struct LockPreset: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
+    var message: String
+
+    init(name: String, message: String) {
+        self.name = name
+        self.message = message
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
+        message = (try? c.decode(String.self, forKey: .message)) ?? ""
+    }
+}
+
 /// Everything persisted to `settings.json`.
 ///
 /// The file location, key names and value shapes are identical to the Python
@@ -16,16 +60,19 @@ struct Preferences: Codable {
     var verifyNotes = true
     var sslVerify = true
     var sslCABundle = ""
-    var lostModeMessage = "{name} - (Lost Mode: Please return to tech desk to disable lost mode)"
-    var lostModePhone = ""
-    var lostModeFootnote = "Property of Rock Ridge Public Schools"
+    /// The first preset is the default. Never empty.
+    var lostModePresets = [LostModePreset(name: "Default",
+                                          message: "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
+                                          footnote: "Property of Rock Ridge Public Schools")]
     var lostModeSound = true
     var renameFormatComputer = "{realname} - {serial}"
     var renameFormatMobile = "{realname} - {username} - {serial}"
     var doubleClickAction = DeviceAction.openInJamf
     /// nil means "use the default column set".
     var listColumns: [String]?
-    var lockMessage = "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock."
+    /// The first preset is the default. Never empty.
+    var lockPresets = [LockPreset(name: "Default",
+                                  message: "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock.")]
     var deviceListComputer: [DeviceEntry] = []
     var deviceListMobile: [DeviceEntry] = []
     var merakiOrgID = ""
@@ -58,6 +105,8 @@ struct Preferences: Codable {
         case merakiNetworkName = "meraki_network_name"
         case credentialsInFile = "credentials_in_file"
         case legacyRenameFormat = "rename_format"
+        case lostModePresets = "lost_mode_presets"
+        case lockPresets = "lock_message_presets"
     }
 
     init() {}
@@ -74,15 +123,25 @@ struct Preferences: Codable {
         verifyNotes = value(.verifyNotes, verifyNotes)
         sslVerify = value(.sslVerify, sslVerify)
         sslCABundle = value(.sslCABundle, sslCABundle)
-        lostModeMessage = value(.lostModeMessage, lostModeMessage)
-        lostModePhone = value(.lostModePhone, lostModePhone)
-        lostModeFootnote = value(.lostModeFootnote, lostModeFootnote)
+        // Presets are newer than the single-message keys. Without saved presets,
+        // the single message (Python app, or earlier versions) becomes the default.
+        let defaults = Preferences()
+        let presets = ((try? c.decodeIfPresent([LostModePreset].self, forKey: .lostModePresets)) ?? nil) ?? []
+        lostModePresets = presets.isEmpty
+            ? [LostModePreset(name: "Default",
+                              message: value(.lostModeMessage, defaults.lostModePresets[0].message),
+                              phone: value(.lostModePhone, defaults.lostModePresets[0].phone),
+                              footnote: value(.lostModeFootnote, defaults.lostModePresets[0].footnote))]
+            : presets
         lostModeSound = value(.lostModeSound, lostModeSound)
         renameFormatComputer = value(.renameFormatComputer, renameFormatComputer)
         renameFormatMobile = value(.renameFormatMobile, renameFormatMobile)
         doubleClickAction = DeviceAction(rawValue: value(.doubleClickAction, doubleClickAction.rawValue)) ?? doubleClickAction
         listColumns = (try? c.decodeIfPresent([String].self, forKey: .listColumns)) ?? nil
-        lockMessage = value(.lockMessage, lockMessage)
+        let locks = ((try? c.decodeIfPresent([LockPreset].self, forKey: .lockPresets)) ?? nil) ?? []
+        lockPresets = locks.isEmpty
+            ? [LockPreset(name: "Default", message: value(.lockMessage, defaults.lockPresets[0].message))]
+            : locks
         deviceListComputer = value(.deviceListComputer, deviceListComputer)
         deviceListMobile = value(.deviceListMobile, deviceListMobile)
         merakiOrgID = value(.merakiOrgID, merakiOrgID)
@@ -106,15 +165,19 @@ struct Preferences: Codable {
         try c.encode(verifyNotes, forKey: .verifyNotes)
         try c.encode(sslVerify, forKey: .sslVerify)
         try c.encode(sslCABundle, forKey: .sslCABundle)
-        try c.encode(lostModeMessage, forKey: .lostModeMessage)
-        try c.encode(lostModePhone, forKey: .lostModePhone)
-        try c.encode(lostModeFootnote, forKey: .lostModeFootnote)
+        try c.encode(lostModePresets, forKey: .lostModePresets)
+        // The default preset also goes under the original single-message keys,
+        // which older versions (and the Python app) read.
+        try c.encode(defaultLostMode.message, forKey: .lostModeMessage)
+        try c.encode(defaultLostMode.phone, forKey: .lostModePhone)
+        try c.encode(defaultLostMode.footnote, forKey: .lostModeFootnote)
         try c.encode(lostModeSound, forKey: .lostModeSound)
         try c.encode(renameFormatComputer, forKey: .renameFormatComputer)
         try c.encode(renameFormatMobile, forKey: .renameFormatMobile)
         try c.encode(doubleClickAction.rawValue, forKey: .doubleClickAction)
         try c.encode(listColumns, forKey: .listColumns)
-        try c.encode(lockMessage, forKey: .lockMessage)
+        try c.encode(lockPresets, forKey: .lockPresets)
+        try c.encode(defaultLock.message, forKey: .lockMessage)
         try c.encode(deviceListComputer, forKey: .deviceListComputer)
         try c.encode(deviceListMobile, forKey: .deviceListMobile)
         try c.encode(merakiOrgID, forKey: .merakiOrgID)
@@ -125,6 +188,9 @@ struct Preferences: Codable {
     }
 
     // MARK: Convenience
+
+    var defaultLostMode: LostModePreset { lostModePresets.first ?? Preferences().lostModePresets[0] }
+    var defaultLock: LockPreset { lockPresets.first ?? Preferences().lockPresets[0] }
 
     func deviceList(for type: DeviceType) -> [DeviceEntry] {
         type == .computer ? deviceListComputer : deviceListMobile
