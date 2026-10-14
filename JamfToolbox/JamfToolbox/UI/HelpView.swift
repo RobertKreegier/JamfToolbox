@@ -89,14 +89,20 @@ private let helpSections: [HelpSection] = [
             + "PIN). Delete removes the device's record from Jamf Pro; wipe the device first, because once "
             + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
             + "for a command, nothing is sent and the message names the privilege to ask for.",
-        "Jamf Audits: the third tab runs read-only reports against Jamf Pro and keeps the results. The first "
-            + "report, Static Group Dependencies, shows everything that depends on a static group: policies, "
-            + "configuration profiles, apps, eBooks and restricted software scoped to it, excluded from it or "
-            + "limited by it, plus smart groups and advanced searches whose criteria name it. Run it before "
-            + "renaming or deleting a group. Choose the group type and group, then Run Audit. Results are saved "
-            + "automatically; sort them by date (or group, type, or count) and delete them individually or with "
-            + "Delete Older Than. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. "
-            + "Object types your account can't read are listed as warnings, meaning the result may be incomplete.",
+        "Jamf Audits: the third tab runs read-only reports against Jamf Pro and keeps the results. Choose a "
+            + "category and a report, fill in its options, and click Run Audit. Static Groups: Group Dependencies, "
+            + "Empty Groups, Unused Groups, Stale Group Members, Duplicate Group Names, Compare Group to a List, "
+            + "and a device's Group Memberships. Configuration Profiles: Unscoped or Scoped to All, Included and "
+            + "Excluded, Deleted or Empty Groups in Scope, Overlapping Payloads, Failed or Pending Installs, and a "
+            + "device's Profiles vs. Scope. Device Health: Stale Check-in, Unsupervised Mobile Devices, OS Below "
+            + "Target, FileVault Off, No Assigned User, Duplicate Serial Numbers, Pending MDM Commands. Policies: "
+            + "Disabled but Still Scoped, Enabled with No Scope, Recent Failures, Ongoing with No Trigger.",
+        "Device reports use devices from your Computers and Mobile Devices lists; you can also right-click a "
+            + "device and choose Audit. Results are saved automatically: sort them by date, report, subject or "
+            + "count, and delete them individually or with Delete Older Than. Run Again repeats a report with the "
+            + "same options. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. Object "
+            + "types your account can't read are listed as warnings, meaning a result may be incomplete. Recent "
+            + "Failures reads every computer's policy history, so it takes longer than the others.",
         "The Activity log at the bottom can be resized by dragging the divider above it; right-click the log to "
             + "copy or clear it.",
         "Show Info opens the device's full Jamf Pro record as a collapsible tree. Use the filter box to find "

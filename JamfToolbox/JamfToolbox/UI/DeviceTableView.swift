@@ -248,6 +248,23 @@ struct DeviceTableView: NSViewRepresentable {
                 item.isEnabled = model.canPerform(command)
                 advanced.addItem(item)
             }
+            // Device-centric audits, run straight from the list.
+            let audit = NSMenu()
+            audit.autoenablesItems = false
+            let single = row >= 0 && row < entries.count && count == 1
+            for (reportID, title) in [("groups-device-memberships", "Group Memberships"),
+                                      ("profiles-device", "Profiles vs. Scope")] {
+                let item = BlockMenuItem(title) { [model, type, entries] in
+                    guard row < entries.count else { return }
+                    model.audits.runDeviceReport(reportID, kind: GroupKind(type), device: entries[row])
+                }
+                item.isEnabled = single
+                audit.addItem(item)
+            }
+            let auditItem = NSMenuItem(title: "Audit", action: nil, keyEquivalent: "")
+            auditItem.submenu = audit
+            menu.addItem(auditItem)
+
             let advancedItem = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
             advancedItem.submenu = advanced
             menu.addItem(advancedItem)

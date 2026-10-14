@@ -64,25 +64,32 @@ enum PreviewData {
     """#.utf8))) ?? .emptyObject
 
     static let auditResults: [AuditResult] = {
-        func finding(_ type: String, _ name: String, _ id: String, _ relationship: String) -> AuditFinding {
-            AuditFinding(objectType: type, objectName: name, objectID: id, relationship: relationship, webPage: nil)
+        func finding(_ type: String, _ name: String, _ id: String, _ detail: String) -> AuditFinding {
+            AuditFinding(objectType: type, objectName: name, objectID: id, detail: detail)
         }
         let server = "https://example.jamfcloud.com"
         return [
-            AuditResult(report: StaticGroupDependencyAudit.reportName, runAt: Date().addingTimeInterval(-3600),
-                        server: server,
+            AuditResult(reportID: AuditReports.groupDependenciesID, report: "Group Dependencies",
+                        runAt: Date().addingTimeInterval(-3600), server: server,
                         subject: AuditSubject(kind: .mobile, id: "7", name: "Grade 5 iPads", memberCount: 148),
+                        subtitle: "Mobile Device static group · 148 member(s)", detailHeading: "Relationship",
+                        parameters: nil,
                         findings: [finding("Mobile Device Configuration Profile", "Wi-Fi - Students", "31", "Scoped"),
                                    finding("Mobile Device Configuration Profile", "Restrictions - Grade 5", "44", "Scoped"),
                                    finding("Mobile Device App", "Seesaw", "12", "Scoped"),
                                    finding("Mobile Device Configuration Profile", "Staff Mail", "52", "Excluded"),
                                    finding("Smart Mobile Device Group", "Grade 5 - Old iPadOS", "9", "Criterion (member of)")],
                         warnings: [], objectsScanned: 131),
-            AuditResult(report: StaticGroupDependencyAudit.reportName, runAt: Date().addingTimeInterval(-86400 * 12),
-                        server: server,
-                        subject: AuditSubject(kind: .computer, id: "2", name: "Lab Macs", memberCount: 24),
-                        findings: [], warnings: ["Skipped restricted software records: your account can't read them."],
-                        objectsScanned: 22),
+            AuditResult(reportID: "health-stale", report: "Stale Check-in", runAt: Date().addingTimeInterval(-86400 * 2),
+                        server: server, subject: nil, subtitle: "Mobile devices · not seen in 30 days",
+                        detailHeading: "Last seen", parameters: nil,
+                        findings: [finding("Mobile Device", "iPad-G5-015", "202", "2026-08-01 (74 days ago)"),
+                                   finding("Mobile Device", "Cart-B-07", "388", "Never")],
+                        warnings: [], objectsScanned: 2940),
+            AuditResult(reportID: "groups-unused", report: "Unused Groups", runAt: Date().addingTimeInterval(-86400 * 12),
+                        server: server, subject: nil, subtitle: "All groups, checked against 260 scoped objects",
+                        detailHeading: "Issue", parameters: nil, findings: [],
+                        warnings: ["Skipped restricted software records: your account can't read them."], objectsScanned: 31),
         ]
     }()
 
