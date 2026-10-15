@@ -313,9 +313,10 @@ private struct NewAuditView: View {
 /// Pickers here change several published values at once; applying the change
 /// on the next run-loop turn avoids "Publishing changes from within view
 /// updates" when the control writes during a view update.
-private func deferred<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+@MainActor
+private func deferred<Value: Sendable>(_ binding: Binding<Value>) -> Binding<Value> {
     Binding(get: { binding.wrappedValue },
-            set: { newValue in DispatchQueue.main.async { binding.wrappedValue = newValue } })
+            set: { newValue in Task { @MainActor in binding.wrappedValue = newValue } })
 }
 
 /// A small number entry with a stepper.
