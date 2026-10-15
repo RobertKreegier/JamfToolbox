@@ -294,6 +294,21 @@ enum AuditObjects {
         }
     }
 
+    /// The entries of a Jamf list. Usually an array, but the Classic API also
+    /// sends some lists (e.g. a policy's `jss_users`) wrapped in an object:
+    /// `{"user": {"id": 1, "name": "x"}}`, `{"user": [...]}`, or `{}` when empty.
+    static func items(_ value: JSONValue?) -> [JSONValue] {
+        guard let value else { return [] }
+        if let array = value.arrayValue { return array }
+        guard case .object(let entries) = value, !entries.isEmpty else { return [] }
+        if value["id"] != nil || value["name"] != nil { return [value] }   // a lone entry
+        if entries.count == 1, let inner = entries.first?.value {
+            if let array = inner.arrayValue { return array }
+            if case .object = inner { return items(inner) }
+        }
+        return []
+    }
+
     /// The id inside a scope/member entry, tolerating the older wrapped shape
     /// (`{"computer_group": {"id": 1}}`).
     static func entryID(_ entry: JSONValue) -> String? {
@@ -337,8 +352,8 @@ enum ScopeReading {
                                        relationship: searchType.isEmpty ? "Criterion" : "Criterion (\(searchType))"))
                 }
                 for entry in entries {
-                    if entry.key == kind.scopeKey, let groups = entry.value.arrayValue {
-                        for group in groups {
+                    if entry.key == kind.scopeKey {
+                        for group in AuditObjects.items(entry.value) {
                             add(GroupReference(groupID: AuditObjects.entryID(group),
                                                groupName: AuditObjects.entryName(group),
                                                relationship: relationship(path + [entry.key])))
@@ -403,16 +418,17 @@ enum ScopeReading {
         var result = Scope()
         guard case .object(let entries)? = root["scope"] else { return result }
         let otherKind: GroupKind = kind == .computer ? .mobile : .computer
-        let ignored: Set<String> = [otherKind.allKey, otherKind.membersKey, otherKind.scopeKey, "exclusions", "limitations"]
+        let ignored: Set<String> = [otherKind.allKey, otherKind.membersKey, otherKind.scopeKey, "exclusions", "limitations",
+                                   "limit_to_users"]
 
         for entry in entries where !ignored.contains(entry.key) {
             switch entry.key {
             case kind.allKey:
                 result.all = AuditObjects.isTrue(entry.value)
             case kind.membersKey:
-                result.devices = Set((entry.value.arrayValue ?? []).compactMap(AuditObjects.entryID))
+                result.devices = Set(AuditObjects.items(entry.value).compactMap(AuditObjects.entryID))
             case kind.scopeKey:
-                for group in entry.value.arrayValue ?? [] {
+                for group in AuditObjects.items(entry.value) {
                     if let id = AuditObjects.entryID(group) { result.groups[id] = AuditObjects.entryName(group) }
                 }
             default:
@@ -421,17 +437,17 @@ enum ScopeReading {
                 if entry.key == "departments" { result.departments = idNames(entry.value) }
                 if entry.key == "jss_user_groups" { result.userGroups = idNames(entry.value) }
                 if entry.key == "all_jss_users" { result.allUsers = AuditObjects.isTrue(entry.value) }
-                if let items = entry.value.arrayValue, !items.isEmpty {
+                if !AuditObjects.items(entry.value).isEmpty {
                     result.otherTargets.append(entry.key.replacingOccurrences(of: "_", with: " "))
                 }
             }
         }
         if let exclusions = root["scope"]?["exclusions"] {
             if case .object(let lists) = exclusions {
-                result.hasAnyExclusion = lists.contains { !($0.value.arrayValue ?? []).isEmpty }
+                result.hasAnyExclusion = lists.contains { !AuditObjects.items($0.value).isEmpty }
             }
-            result.excludedDevices = Set((exclusions[kind.membersKey]?.arrayValue ?? []).compactMap(AuditObjects.entryID))
-            for group in exclusions[kind.scopeKey]?.arrayValue ?? [] {
+            result.excludedDevices = Set(AuditObjects.items(exclusions[kind.membersKey]).compactMap(AuditObjects.entryID))
+            for group in AuditObjects.items(exclusions[kind.scopeKey]) {
                 if let id = AuditObjects.entryID(group) { result.excludedGroups[id] = AuditObjects.entryName(group) }
             }
             result.excludedUsers = userNames(exclusions["jss_users"] ?? .array([]))
@@ -444,14 +460,14 @@ enum ScopeReading {
 
     private static func idNames(_ list: JSONValue) -> [String: String] {
         var result: [String: String] = [:]
-        for (index, item) in (list.arrayValue ?? []).enumerated() {
+        for (index, item) in AuditObjects.items(list).enumerated() {
             result[AuditObjects.entryID(item) ?? "#\(index)"] = AuditObjects.entryName(item)
         }
         return result
     }
 
     private static func userNames(_ list: JSONValue) -> Set<String> {
-        Set((list.arrayValue ?? []).map { AuditObjects.entryName($0).lowercased() }.filter { !$0.isEmpty })
+        Set(AuditObjects.items(list).map { AuditObjects.entryName($0).lowercased() }.filter { !$0.isEmpty })
     }
 }
 

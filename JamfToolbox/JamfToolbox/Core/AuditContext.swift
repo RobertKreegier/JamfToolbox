@@ -211,7 +211,7 @@ final class AuditContext {
 
     private static func groupRecord(_ root: JSONValue, kind: GroupKind, id: String, fallbackName: String,
                                     isSmart: Bool) -> GroupRecord {
-        let members = (root[kind.membersKey]?.arrayValue ?? []).compactMap { member -> GroupRecord.Member? in
+        let members = AuditObjects.items(root[kind.membersKey]).compactMap { member -> GroupRecord.Member? in
             guard let memberID = AuditObjects.entryID(member) else { return nil }
             let body = member[kind == .computer ? "computer" : "mobile_device"] ?? member
             return GroupRecord.Member(id: memberID, name: AuditObjects.entryName(member),
@@ -381,7 +381,7 @@ final class AuditContext {
         var member = Set<String>(), unreadable = 0
         for (id, json) in read {
             guard let json, let root = AuditObjects.rootObject(json) else { unreadable += 1; continue }
-            let users = root["users"]?.arrayValue ?? []
+            let users = AuditObjects.items(root["users"])
             if users.contains(where: { ($0["username"] ?? $0["name"])?.text.lowercased() == username }) { member.insert(id) }
         }
         if unreadable > 0 {

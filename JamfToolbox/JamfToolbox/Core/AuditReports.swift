@@ -391,7 +391,7 @@ enum AuditReports {
         switch p.kind {
         case .computer:
             // Classic computer records list membership by name only.
-            for item in record["groups_accounts"]?["computer_group_memberships"]?.arrayValue ?? [] {
+            for item in AuditObjects.items(record["groups_accounts"]?["computer_group_memberships"]) {
                 let groupName = item.text.isEmpty ? AuditObjects.entryName(item) : item.text
                 guard !groupName.isEmpty else { continue }
                 let id = groups.first { $0.name == groupName }?.id ?? ""
@@ -401,7 +401,7 @@ enum AuditReports {
                                              webPage: isSmart ? AuditObjects.smartComputerGroup.webPage : nil))
             }
         case .mobile:
-            for item in record["mobile_device_groups"]?.arrayValue ?? [] {
+            for item in AuditObjects.items(record["mobile_device_groups"]) {
                 let id = AuditObjects.entryID(item)
                 let groupName = AuditObjects.entryName(item)
                 let isSmart = smart(id: id, name: groupName)
@@ -637,17 +637,17 @@ enum AuditReports {
             ?? record["general"]?["name"]?.text ?? p.deviceName ?? deviceID
         var groupIDs = Set<String>(), groupNames = Set<String>()
         if p.kind == .computer {
-            for item in record["groups_accounts"]?["computer_group_memberships"]?.arrayValue ?? [] {
+            for item in AuditObjects.items(record["groups_accounts"]?["computer_group_memberships"]) {
                 let n = item.text.isEmpty ? AuditObjects.entryName(item) : item.text
                 if !n.isEmpty { groupNames.insert(n.lowercased()) }
             }
         } else {
-            for item in record["mobile_device_groups"]?.arrayValue ?? [] {
+            for item in AuditObjects.items(record["mobile_device_groups"]) {
                 if let id = AuditObjects.entryID(item) { groupIDs.insert(id) }
                 groupNames.insert(AuditObjects.entryName(item).lowercased())
             }
         }
-        let installed = (record["configuration_profiles"]?.arrayValue ?? []).map { item -> (id: String, name: String, uuid: String) in
+        let installed = AuditObjects.items(record["configuration_profiles"]).map { item -> (id: String, name: String, uuid: String) in
             (AuditObjects.entryID(item) ?? "", (item["display_name"] ?? item["name"])?.text ?? "", item["uuid"]?.text ?? "")
         }
         let username = (record["location"]?["username"]?.text ?? "").trimmingCharacters(in: .whitespaces).lowercased()
