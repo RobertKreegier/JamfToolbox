@@ -206,7 +206,12 @@ final class AuditCenter: ObservableObject {
         if let window = Dialogs.anchor { response = await panel.beginSheetModal(for: window) } else { response = panel.runModal() }
         guard response == .OK, let url = panel.url else { return }
         var lines: [String]
-        if result.findings.contains(where: { $0.installed != nil }) {   // a device's profiles
+        if result.findings.contains(where: { $0.device != nil }) {   // profile and device pairs
+            lines = [ListExport.csvLine(["Profile", "Device", result.detailHeading, "Excluded", "Profile ID", "Device ID"])]
+            lines += result.findings.map {
+                ListExport.csvLine([$0.objectName, $0.deviceName, $0.detail, $0.excludedText, $0.objectID, $0.device?.id ?? ""])
+            }
+        } else if result.findings.contains(where: { $0.installed != nil }) {   // a device's profiles
             lines = [ListExport.csvLine(["Name", result.detailHeading, "Installed", "Type", "Jamf ID"])]
             lines += result.findings.map { ListExport.csvLine([$0.objectName, $0.detail, $0.installedText, $0.objectType, $0.objectID]) }
         } else {

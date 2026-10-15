@@ -381,7 +381,24 @@ private struct AuditResultView: View {
     @ViewBuilder
     private var findingsTable: some View {
         let rows = result.findings.sorted(using: sortOrder)
-        if result.findings.contains(where: { $0.installed != nil }) {
+        if pairsDevices {
+            Table(rows, selection: $findingSelection, sortOrder: $sortOrder) {
+                TableColumn("Profile", value: \.objectName) { finding in
+                    Text(finding.objectName).help(finding.objectName)
+                }
+                .width(min: 80, ideal: 170)
+                TableColumn("Device", value: \.deviceName)
+                    .width(min: 70, ideal: 130)
+                TableColumn(result.detailHeading, value: \.detail) { finding in
+                    Text(finding.detail).help(finding.detail)
+                }
+                .width(min: 100, ideal: 220)
+                TableColumn("Excluded", value: \.excludedText) { finding in
+                    Text(finding.excludedText).help(finding.excludedText)
+                }
+                .width(min: 100, ideal: 220)
+            }
+        } else if result.findings.contains(where: { $0.installed != nil }) {
             Table(rows, selection: $findingSelection, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.objectName)
                     .width(min: 80, ideal: 170)
@@ -426,14 +443,28 @@ private struct AuditResultView: View {
             Divider()
         }
         Menu("Copy") {
-            Button("Copy Name") { copy(ids, \.objectName) }
-            Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
+            if pairsDevices {
+                Button("Copy Profile Name") { copy(ids, \.objectName) }
+                Button("Copy Device Name") { copy(ids, \.deviceName) }
+                Button("Copy Targeted") { copy(ids, \.detail) }
+                Button("Copy Excluded") { copy(ids, \.excludedText) }
+            } else {
+                Button("Copy Name") { copy(ids, \.objectName) }
+                Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
+            }
         }
         Button("Export CSV…") { Task { await center.exportCSV(result) } }
         Divider()
-        Button("Open in Jamf Pro") { open(ids) }
+        Button(pairsDevices ? "Open Profile in Jamf Pro" : "Open in Jamf Pro") { open(ids) }
             .disabled(!canOpen(ids))
+        if pairsDevices {
+            Button("Open Device in Jamf Pro") { openDevices(ids) }
+                .disabled(findings(ids).allSatisfy { $0.device == nil })
+        }
     }
+
+    /// Rows pair a profile with one device (Devices Targeted and Excluded).
+    private var pairsDevices: Bool { result.findings.contains { $0.device != nil } }
 
     private func scopeChangeButton(_ change: ScopeChange, _ selected: [AuditFinding]) -> some View {
         let count = center.candidates(change, in: selected).count
@@ -475,6 +506,11 @@ private struct AuditResultView: View {
     }
 
     private var foundText: String {
+        if pairsDevices {
+            let devices = Set(result.findings.compactMap { $0.device?.id }).count
+            let profiles = Set(result.findings.map(\.objectID)).count
+            return "\(devices) device\(devices == 1 ? "" : "s") targeted and excluded, across \(profiles) profile\(profiles == 1 ? "" : "s")"
+        }
         let counts = Dictionary(grouping: result.findings, by: \.objectType).mapValues(\.count)
         let total = result.findings.count
         let noun = result.reportID == AuditReports.groupDependenciesID ? "reference" : "finding"
@@ -523,8 +559,22 @@ private struct AuditResultView: View {
 
     private func canOpen(_ ids: Set<AuditFinding.ID>) -> Bool { findings(ids).contains { url($0) != nil } }
 
+    /// Opens each selected object once (several rows can share a profile).
     private func open(_ ids: Set<AuditFinding.ID>) {
-        for finding in findings(ids) { if let url = url(finding) { NSWorkspace.shared.open(url) } }
+        var seen = Set<URL>()
+        for finding in findings(ids) {
+            if let url = url(finding), seen.insert(url).inserted { NSWorkspace.shared.open(url) }
+        }
+    }
+
+    private func openDevices(_ ids: Set<AuditFinding.ID>) {
+        var seen = Set<URL>()
+        for device in findings(ids).compactMap(\.device) {
+            let page = device.kind == .computer ? "computers.html" : "mobileDevices.html"
+            if let url = URL(string: "\(result.server)/\(page)?id=\(device.id)&o=r"), seen.insert(url).inserted {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     private func copy(_ ids: Set<AuditFinding.ID>, _ field: KeyPath<AuditFinding, String>) {
