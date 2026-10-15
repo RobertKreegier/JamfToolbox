@@ -253,7 +253,8 @@ struct DeviceTableView: NSViewRepresentable {
             audit.autoenablesItems = false
             let single = row >= 0 && row < entries.count && count == 1
             for (reportID, title) in [("groups-device-memberships", "Group Memberships"),
-                                      ("profiles-device", "Profiles vs. Scope")] {
+                                      ("profiles-device", "Profiles vs. Scope"),
+                                      ("profiles-device-targeting", "Config Profiles in Scope")] {
                 let item = BlockMenuItem(title) { [model, type, entries] in
                     guard row < entries.count else { return }
                     model.audits.runDeviceReport(reportID, kind: GroupKind(type), device: entries[row])

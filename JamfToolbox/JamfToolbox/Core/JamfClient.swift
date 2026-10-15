@@ -112,6 +112,14 @@ actor JamfClient {
     @discardableResult
     private func request(_ path: String, method: String = "GET", body: Data? = nil,
                          contentType: String? = nil) async throws -> JSONValue {
+        let data = try await rawRequest(path, method: method, body: body, contentType: contentType)
+        guard !data.isEmpty else { return .emptyObject }
+        return (try? JSONValue.parse(data)) ?? .emptyObject
+    }
+
+    /// Sends an authenticated request and returns the response body as is.
+    private func rawRequest(_ path: String, method: String = "GET", body: Data? = nil,
+                            contentType: String? = nil, accept: String = "application/json") async throws -> Data {
         let bearer = try await currentToken()
         guard let url = URL(string: "\(baseURL)\(path)") else { throw ServiceError("Invalid request URL: \(path)") }
         var request = URLRequest(url: url)
@@ -119,7 +127,7 @@ actor JamfClient {
         request.httpBody = body
         request.timeoutInterval = 45
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
 
         let result: HTTPResult
@@ -145,8 +153,7 @@ actor JamfClient {
             let detail = String(decoding: result.data.prefix(300), as: UTF8.self)
             throw ServiceError("HTTP \(result.status) on \(method) \(path). \(detail)")
         }
-        guard !result.data.isEmpty else { return .emptyObject }
-        return (try? JSONValue.parse(result.data)) ?? .emptyObject
+        return result.data
     }
 
     // MARK: Searches & detail
@@ -464,10 +471,26 @@ actor JamfClient {
         return "Device record deleted from Jamf Pro."
     }
 
-    // MARK: Read-only access for audits
+    // MARK: Read access for audits
 
-    /// A plain authenticated GET. Audits only ever read.
+    /// A plain authenticated GET.
     func get(_ path: String) async throws -> JSONValue { try await request(path) }
+
+    // MARK: Profile scope changes
+
+    /// A profile's `<scope>` as Jamf Pro's Classic API returns it, in XML
+    /// (the only format the Classic API accepts back).
+    func profileScopeXML(_ type: AuditObjects.ObjectType, id: String) async throws -> Data {
+        try await rawRequest("/JSSResource/\(type.resource)/id/\(URLEncoding.quote(id))/subset/Scope",
+                             accept: "application/xml")
+    }
+
+    /// Replaces a profile's scope. `body` is the whole `<scope>` inside the
+    /// profile's root element, so nothing else about the profile is sent.
+    func putProfileScope(_ type: AuditObjects.ObjectType, id: String, body: Data) async throws {
+        _ = try await rawRequest("/JSSResource/\(type.resource)/id/\(URLEncoding.quote(id))", method: "PUT",
+                                 body: body, contentType: "application/xml", accept: "application/xml")
+    }
 
     nonisolated func webURL(page: String, id: String) -> URL? {
         URL(string: "\(baseURL)/\(page)?id=\(id)&o=r")

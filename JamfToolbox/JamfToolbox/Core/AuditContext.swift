@@ -211,7 +211,7 @@ final class AuditContext {
 
     private static func groupRecord(_ root: JSONValue, kind: GroupKind, id: String, fallbackName: String,
                                     isSmart: Bool) -> GroupRecord {
-        let members = (root[kind.membersKey]?.arrayValue ?? []).compactMap { member -> GroupRecord.Member? in
+        let members = AuditObjects.items(root[kind.membersKey]).compactMap { member -> GroupRecord.Member? in
             guard let memberID = AuditObjects.entryID(member) else { return nil }
             let body = member[kind == .computer ? "computer" : "mobile_device"] ?? member
             return GroupRecord.Member(id: memberID, name: AuditObjects.entryName(member),
@@ -369,6 +369,25 @@ final class AuditContext {
         let json = try await client.get("/JSSResource/\(kind.deviceResource)/id/\(id)")
         guard let root = AuditObjects.rootObject(json) else { throw ServiceError("The device record couldn't be read.") }
         return root
+    }
+
+    /// Which of the given Jamf user groups list `username` as a member.
+    /// Groups that can't be read are skipped, with a warning.
+    func userGroups(containing username: String, among ids: Set<String>) async throws -> Set<String> {
+        guard !username.isEmpty, !ids.isEmpty else { return [] }
+        let read = try await readAll(ids.sorted(), verb: "Reading user groups", name: { "user group \($0)" }) { id in
+            try await self.client.get("/JSSResource/usergroups/id/\(id)")
+        }
+        var member = Set<String>(), unreadable = 0
+        for (id, json) in read {
+            guard let json, let root = AuditObjects.rootObject(json) else { unreadable += 1; continue }
+            let users = AuditObjects.items(root["users"])
+            if users.contains(where: { ($0["username"] ?? $0["name"])?.text.lowercased() == username }) { member.insert(id) }
+        }
+        if unreadable > 0 {
+            warn("\(unreadable) user group(s) couldn't be read, so targets and exclusions through them weren't checked.")
+        }
+        return member
     }
 
     /// Policy log entries for each computer (classic computer history).

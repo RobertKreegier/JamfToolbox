@@ -82,21 +82,32 @@ struct AuditFinding: Codable, Hashable, Identifiable {
     var detail: String
     /// Jamf Pro web page for the object type, e.g. `policies.html`.
     var webPage: String?
+    /// For a device's profiles: how the device is directly scoped, which
+    /// decides the scope changes offered for the row.
+    var directScope: DirectScope?
+    /// For a device's profiles: whether the profile is installed on the device.
+    var installed: Bool?
 
     // "relationship" is the key results saved by the first audit used.
     enum CodingKeys: String, CodingKey {
-        case objectType, objectName, objectID, detail = "relationship", webPage
+        case objectType, objectName, objectID, detail = "relationship", webPage, directScope, installed
     }
 
-    init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil) {
+    init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
+         directScope: DirectScope? = nil, installed: Bool? = nil) {
         self.objectType = objectType
         self.objectName = objectName
         self.objectID = objectID
         self.detail = detail
         self.webPage = webPage ?? AuditObjects.webPage(forObjectType: objectType)
+        self.directScope = directScope
+        self.installed = installed
     }
 
     var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" }
+
+    /// "Yes", "No", or "" when the report doesn't say.
+    var installedText: String { installed.map { $0 ? "Yes" : "No" } ?? "" }
 }
 
 /// A saved audit run.
@@ -283,6 +294,21 @@ enum AuditObjects {
         }
     }
 
+    /// The entries of a Jamf list. Usually an array, but the Classic API also
+    /// sends some lists (e.g. a policy's `jss_users`) wrapped in an object:
+    /// `{"user": {"id": 1, "name": "x"}}`, `{"user": [...]}`, or `{}` when empty.
+    static func items(_ value: JSONValue?) -> [JSONValue] {
+        guard let value else { return [] }
+        if let array = value.arrayValue { return array }
+        guard case .object(let entries) = value, !entries.isEmpty else { return [] }
+        if value["id"] != nil || value["name"] != nil { return [value] }   // a lone entry
+        if entries.count == 1, let inner = entries.first?.value {
+            if let array = inner.arrayValue { return array }
+            if case .object = inner { return items(inner) }
+        }
+        return []
+    }
+
     /// The id inside a scope/member entry, tolerating the older wrapped shape
     /// (`{"computer_group": {"id": 1}}`).
     static func entryID(_ entry: JSONValue) -> String? {
@@ -326,8 +352,8 @@ enum ScopeReading {
                                        relationship: searchType.isEmpty ? "Criterion" : "Criterion (\(searchType))"))
                 }
                 for entry in entries {
-                    if entry.key == kind.scopeKey, let groups = entry.value.arrayValue {
-                        for group in groups {
+                    if entry.key == kind.scopeKey {
+                        for group in AuditObjects.items(entry.value) {
                             add(GroupReference(groupID: AuditObjects.entryID(group),
                                                groupName: AuditObjects.entryName(group),
                                                relationship: relationship(path + [entry.key])))
@@ -369,40 +395,79 @@ enum ScopeReading {
         var otherTargets: [String] = []
         var excludedDevices: Set<String> = []
         var excludedGroups: [String: String] = [:]
+        /// Jamf user targets and exclusions, by lower-cased username.
+        var users: Set<String> = []
+        var excludedUsers: Set<String> = []
+        /// Building and department targets and exclusions, id → name.
+        var buildings: [String: String] = [:]
+        var departments: [String: String] = [:]
+        var excludedBuildings: [String: String] = [:]
+        var excludedDepartments: [String: String] = [:]
+        /// Jamf user group targets and exclusions, id → name, and "All Users".
+        var userGroups: [String: String] = [:]
+        var excludedUserGroups: [String: String] = [:]
+        var allUsers = false
 
-        var isEmpty: Bool { !all && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
-        var hasExclusions: Bool { !excludedDevices.isEmpty || !excludedGroups.isEmpty }
+        var isEmpty: Bool { !all && !allUsers && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
+        /// True when any exclusion list is non-empty (devices, groups, users, buildings, departments, network segments…).
+        var hasAnyExclusion = false
+        var hasExclusions: Bool { hasAnyExclusion || !excludedDevices.isEmpty || !excludedGroups.isEmpty }
     }
 
     static func scope(of root: JSONValue, kind: GroupKind) -> Scope {
         var result = Scope()
         guard case .object(let entries)? = root["scope"] else { return result }
         let otherKind: GroupKind = kind == .computer ? .mobile : .computer
-        let ignored: Set<String> = [otherKind.allKey, otherKind.membersKey, otherKind.scopeKey, "exclusions", "limitations"]
+        let ignored: Set<String> = [otherKind.allKey, otherKind.membersKey, otherKind.scopeKey, "exclusions", "limitations",
+                                   "limit_to_users"]
 
         for entry in entries where !ignored.contains(entry.key) {
             switch entry.key {
             case kind.allKey:
                 result.all = AuditObjects.isTrue(entry.value)
             case kind.membersKey:
-                result.devices = Set((entry.value.arrayValue ?? []).compactMap(AuditObjects.entryID))
+                result.devices = Set(AuditObjects.items(entry.value).compactMap(AuditObjects.entryID))
             case kind.scopeKey:
-                for group in entry.value.arrayValue ?? [] {
+                for group in AuditObjects.items(entry.value) {
                     if let id = AuditObjects.entryID(group) { result.groups[id] = AuditObjects.entryName(group) }
                 }
             default:
-                if let items = entry.value.arrayValue, !items.isEmpty {
+                if entry.key == "jss_users" { result.users = userNames(entry.value) }
+                if entry.key == "buildings" { result.buildings = idNames(entry.value) }
+                if entry.key == "departments" { result.departments = idNames(entry.value) }
+                if entry.key == "jss_user_groups" { result.userGroups = idNames(entry.value) }
+                if entry.key == "all_jss_users" { result.allUsers = AuditObjects.isTrue(entry.value) }
+                if !AuditObjects.items(entry.value).isEmpty {
                     result.otherTargets.append(entry.key.replacingOccurrences(of: "_", with: " "))
                 }
             }
         }
         if let exclusions = root["scope"]?["exclusions"] {
-            result.excludedDevices = Set((exclusions[kind.membersKey]?.arrayValue ?? []).compactMap(AuditObjects.entryID))
-            for group in exclusions[kind.scopeKey]?.arrayValue ?? [] {
+            if case .object(let lists) = exclusions {
+                result.hasAnyExclusion = lists.contains { !AuditObjects.items($0.value).isEmpty }
+            }
+            result.excludedDevices = Set(AuditObjects.items(exclusions[kind.membersKey]).compactMap(AuditObjects.entryID))
+            for group in AuditObjects.items(exclusions[kind.scopeKey]) {
                 if let id = AuditObjects.entryID(group) { result.excludedGroups[id] = AuditObjects.entryName(group) }
             }
+            result.excludedUsers = userNames(exclusions["jss_users"] ?? .array([]))
+            result.excludedBuildings = idNames(exclusions["buildings"] ?? .array([]))
+            result.excludedDepartments = idNames(exclusions["departments"] ?? .array([]))
+            result.excludedUserGroups = idNames(exclusions["jss_user_groups"] ?? .array([]))
         }
         return result
+    }
+
+    private static func idNames(_ list: JSONValue) -> [String: String] {
+        var result: [String: String] = [:]
+        for (index, item) in AuditObjects.items(list).enumerated() {
+            result[AuditObjects.entryID(item) ?? "#\(index)"] = AuditObjects.entryName(item)
+        }
+        return result
+    }
+
+    private static func userNames(_ list: JSONValue) -> Set<String> {
+        Set(AuditObjects.items(list).map { AuditObjects.entryName($0).lowercased() }.filter { !$0.isEmpty })
     }
 }
 
