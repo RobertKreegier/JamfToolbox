@@ -42,6 +42,11 @@ struct DeviceRecord {
     let managed: Bool?
     let fileVaultEnabled: Bool?
     let fileVaultState: String
+    /// From User and Location. The Jamf Pro API gives ids; names when it has them.
+    var buildingID = ""
+    var departmentID = ""
+    var building = ""
+    var department = ""
 
     var objectType: String { kind.label }
 }
@@ -283,10 +288,11 @@ final class AuditContext {
         }
         let id = text(json["id"], json["mobileDeviceId"])
         guard !id.isEmpty else { return nil }
+        var record: DeviceRecord
         switch kind {
         case .computer:
             let encryption = json["diskEncryption"] ?? .emptyObject
-            return DeviceRecord(
+            record = DeviceRecord(
                 kind: kind, id: id, name: text(general["name"]), serial: text(hardware["serialNumber"]),
                 username: text(user["username"]), osVersion: text(json["operatingSystem"]?["version"]),
                 managementID: text(general["managementId"]),
@@ -296,7 +302,7 @@ final class AuditContext {
                 fileVaultState: text(encryption["bootPartitionEncryptionDetails"]?["partitionFileVault2State"],
                                      json["operatingSystem"]?["fileVault2Status"]))
         case .mobile:
-            return DeviceRecord(
+            record = DeviceRecord(
                 kind: kind, id: id, name: text(general["displayName"], general["name"]),
                 serial: text(hardware["serialNumber"]), username: text(user["username"]),
                 osVersion: text(general["osVersion"]), managementID: text(general["managementId"]),
@@ -304,6 +310,11 @@ final class AuditContext {
                 supervised: flag(general["supervised"]), managed: flag(general["managed"]),
                 fileVaultEnabled: nil, fileVaultState: "")
         }
+        record.buildingID = text(user["buildingId"])
+        record.departmentID = text(user["departmentId"])
+        record.building = text(user["buildingName"], user["building"])
+        record.department = text(user["departmentName"], user["department"])
+        return record
     }
 
     // MARK: MDM commands
@@ -372,22 +383,46 @@ final class AuditContext {
     }
 
     /// Which of the given Jamf user groups list `username` as a member.
-    /// Groups that can't be read are skipped, with a warning.
     func userGroups(containing username: String, among ids: Set<String>) async throws -> Set<String> {
-        guard !username.isEmpty, !ids.isEmpty else { return [] }
+        guard !username.isEmpty else { return [] }
+        return Set(try await userGroupMembers(ids).filter { $0.value.contains(username) }.keys)
+    }
+
+    /// The members (lower-cased usernames) of each of the given Jamf user groups.
+    /// Groups that can't be read are left out, with a warning.
+    func userGroupMembers(_ ids: Set<String>) async throws -> [String: Set<String>] {
+        guard !ids.isEmpty else { return [:] }
         let read = try await readAll(ids.sorted(), verb: "Reading user groups", name: { "user group \($0)" }) { id in
             try await self.client.get("/JSSResource/usergroups/id/\(id)")
         }
-        var member = Set<String>(), unreadable = 0
+        var members: [String: Set<String>] = [:], unreadable = 0
         for (id, json) in read {
             guard let json, let root = AuditObjects.rootObject(json) else { unreadable += 1; continue }
-            let users = AuditObjects.items(root["users"])
-            if users.contains(where: { ($0["username"] ?? $0["name"])?.text.lowercased() == username }) { member.insert(id) }
+            members[id] = Set(AuditObjects.items(root["users"]).compactMap { ($0["username"] ?? $0["name"])?.text.lowercased() })
         }
         if unreadable > 0 {
             warn("\(unreadable) user group(s) couldn't be read, so targets and exclusions through them weren't checked.")
         }
-        return member
+        return members
+    }
+
+    /// Specific device groups with their members, read a few at a time.
+    /// Groups that can't be read are left out, with a warning.
+    func groups(_ kind: GroupKind, ids: Set<String>) async throws -> [String: GroupRecord] {
+        guard !ids.isEmpty else { return [:] }
+        if let cached = groupCache[kind] { return Dictionary(cached.filter { ids.contains($0.id) }.map { ($0.id, $0) }) { a, _ in a } }
+        let read = try await readAll(ids.sorted(), verb: "Reading \(kind.label.lowercased()) groups", name: { "group \($0)" }) { id in
+            try await self.client.get("/JSSResource/\(kind.resource)/id/\(id)")
+        }
+        var records: [String: GroupRecord] = [:], unreadable = 0
+        for (id, json) in read {
+            guard let json, let root = AuditObjects.rootObject(json) else { unreadable += 1; continue }
+            records[id] = Self.groupRecord(root, kind: kind, id: id, fallbackName: "", isSmart: false)
+        }
+        if unreadable > 0 {
+            warn("\(unreadable) \(kind.label.lowercased()) group(s) couldn't be read, so targets and exclusions through them weren't checked.")
+        }
+        return records
     }
 
     /// Policy log entries for each computer (classic computer history).

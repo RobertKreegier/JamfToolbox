@@ -87,10 +87,14 @@ struct AuditFinding: Codable, Hashable, Identifiable {
     var directScope: DirectScope?
     /// For a device's profiles: whether the profile is installed on the device.
     var installed: Bool?
+    /// For rows about an object and one device (Devices Targeted and Excluded):
+    /// the device, and how it's excluded (`detail` says how it's targeted).
+    var device: FindingDevice?
+    var excludedVia: String?
 
     // "relationship" is the key results saved by the first audit used.
     enum CodingKeys: String, CodingKey {
-        case objectType, objectName, objectID, detail = "relationship", webPage, directScope, installed
+        case objectType, objectName, objectID, detail = "relationship", webPage, directScope, installed, device, excludedVia
     }
 
     init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
@@ -104,10 +108,21 @@ struct AuditFinding: Codable, Hashable, Identifiable {
         self.installed = installed
     }
 
-    var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" }
+    var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" + (device.map { "|\($0.id)" } ?? "") }
+
+    /// Sort and display helpers for the device columns.
+    var deviceName: String { device?.name ?? "" }
+    var excludedText: String { excludedVia ?? "" }
 
     /// "Yes", "No", or "" when the report doesn't say.
     var installedText: String { installed.map { $0 ? "Yes" : "No" } ?? "" }
+}
+
+/// A device a finding is about, alongside its object.
+struct FindingDevice: Codable, Hashable {
+    var kind: GroupKind
+    var id: String
+    var name: String
 }
 
 /// A saved audit run.

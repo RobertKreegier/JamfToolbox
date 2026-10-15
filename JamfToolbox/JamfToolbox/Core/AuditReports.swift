@@ -94,6 +94,9 @@ enum AuditReports {
         AuditReport(id: "profiles-include-exclude", category: .profiles, title: "Included and Excluded",
                     summary: "Profiles that both target and exclude the same group or device. The exclusion wins, so the target is misleading.",
                     inputs: [], detailHeading: "Conflict", run: profileIncludeExclude),
+        AuditReport(id: "profiles-devices-targeted-excluded", category: .profiles, title: "Devices Targeted and Excluded",
+                    summary: "Every device that a profile both targets and excludes, by any route: for example targeted through one group and excluded through another, or targeted to all devices and excluded through the device's user, user group, building or department. The exclusion wins, so these devices don't get the profile.",
+                    inputs: [.kind], detailHeading: "Targeted", run: devicesTargetedAndExcluded),
         AuditReport(id: "profiles-bad-groups", category: .profiles, title: "Deleted or Empty Groups in Scope",
                     summary: "Profiles whose scope or exclusions point at a group that no longer exists, or that target an empty group.",
                     inputs: [], detailHeading: "Issue", run: profileBadGroups),
@@ -578,6 +581,9 @@ enum AuditReports {
         /// The Jamf user groups (ids) the assigned user belongs to, among those
         /// the profiles refer to. Filled in by `loadUserGroups`.
         var userGroupIDs: Set<String> = []
+        /// Building and department ids, when known (the Jamf Pro API inventory has them).
+        var buildingID = ""
+        var departmentID = ""
 
         /// How the device's assigned user, building and department reach a
         /// profile's scope: "user “jdoe”", "department “Tech”", ….
@@ -590,15 +596,18 @@ enum AuditReports {
 
         func locationMatch(_ scope: ScopeReading.Scope) -> LocationMatch {
             var match = LocationMatch()
-            func has(_ names: [String: String], _ value: String) -> Bool {
-                !value.isEmpty && names.values.contains { $0.caseInsensitiveCompare(value) == .orderedSame }
+            /// The scope entry's name if the device's building/department is in `list` (by id, else name).
+            func find(_ list: [String: String], id: String, name: String) -> String? {
+                if !id.isEmpty, let found = list[id] { return found.isEmpty ? name : found }
+                guard !name.isEmpty else { return nil }
+                return list.values.first { $0.caseInsensitiveCompare(name) == .orderedSame }
             }
             if !username.isEmpty && scope.users.contains(username) {
                 match.targetedByUser = true
                 match.targets.append("user “\(username)”")
             }
-            if has(scope.buildings, building) { match.targets.append("building “\(building)”") }
-            if has(scope.departments, department) { match.targets.append("department “\(department)”") }
+            if let found = find(scope.buildings, id: buildingID, name: building) { match.targets.append("building “\(found)”") }
+            if let found = find(scope.departments, id: departmentID, name: department) { match.targets.append("department “\(found)”") }
             if scope.allUsers && !username.isEmpty { match.targets.append("all users") }
             for (id, name) in scope.userGroups.sorted(by: { $0.value < $1.value }) where userGroupIDs.contains(id) {
                 match.targets.append("user group “\(name)”")
@@ -607,8 +616,10 @@ enum AuditReports {
                 match.excludedByUser = true
                 match.exclusions.append("user “\(username)”")
             }
-            if has(scope.excludedBuildings, building) { match.exclusions.append("building “\(building)”") }
-            if has(scope.excludedDepartments, department) { match.exclusions.append("department “\(department)”") }
+            if let found = find(scope.excludedBuildings, id: buildingID, name: building) { match.exclusions.append("building “\(found)”") }
+            if let found = find(scope.excludedDepartments, id: departmentID, name: department) {
+                match.exclusions.append("department “\(found)”")
+            }
             for (id, name) in scope.excludedUserGroups.sorted(by: { $0.value < $1.value }) where userGroupIDs.contains(id) {
                 match.exclusions.append("user group “\(name)”")
             }
@@ -715,6 +726,37 @@ enum AuditReports {
         return viaText
     }
 
+    /// How a profile's scope reaches one device: "directly", "via static group “X”, user “jdoe”", …
+    struct Routes {
+        var targets = ""
+        var exclusions = ""
+        var targetedDirectly = false
+        var excludedDirectly = false
+        var location = DeviceFacts.LocationMatch()
+    }
+
+    static func routes(_ scope: ScopeReading.Scope, to device: DeviceFacts, kind: GroupKind,
+                       groupLabel: (String, String) -> String) -> Routes {
+        var routes = Routes()
+        var targetVia: [String] = []
+        if scope.all { targetVia.append("all \(kind.pluralLabel)") }
+        for (id, name) in scope.groups.sorted(by: { $0.value < $1.value }) where device.inGroup(id, name) {
+            targetVia.append(groupLabel(id, name))
+        }
+        routes.targetedDirectly = scope.devices.contains(device.id)
+        routes.location = device.locationMatch(scope)
+        targetVia += routes.location.targets
+        var excludeVia: [String] = []
+        for (id, name) in scope.excludedGroups.sorted(by: { $0.value < $1.value }) where device.inGroup(id, name) {
+            excludeVia.append(groupLabel(id, name))
+        }
+        routes.excludedDirectly = scope.excludedDevices.contains(device.id)
+        excludeVia += routes.location.exclusions
+        routes.targets = how(directly: routes.targetedDirectly, via: targetVia)
+        routes.exclusions = how(directly: routes.excludedDirectly, via: excludeVia)
+        return routes
+    }
+
     /// Every profile that targets, excludes or is installed on one device, and how.
     static func deviceProfileTargeting(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var device = try await deviceFacts(context, p)
@@ -733,22 +775,8 @@ enum AuditReports {
         var matchedInstalled = Set<Int>()
         for profile in profiles {
             let scope = ScopeReading.scope(of: profile.root, kind: p.kind)
-            var targetVia: [String] = []
-            if scope.all { targetVia.append("all \(p.kind.pluralLabel)") }
-            for (id, name) in scope.groups.sorted(by: { $0.value < $1.value }) where device.inGroup(id, name) {
-                targetVia.append(groupLabel(id, name))
-            }
-            let targetedDirectly = scope.devices.contains(device.id)
-            let location = device.locationMatch(scope)
-            targetVia += location.targets
-            var excludeVia: [String] = []
-            for (id, name) in scope.excludedGroups.sorted(by: { $0.value < $1.value }) where device.inGroup(id, name) {
-                excludeVia.append(groupLabel(id, name))
-            }
-            let excludedDirectly = scope.excludedDevices.contains(device.id)
-            excludeVia += location.exclusions
-            let targets = how(directly: targetedDirectly, via: targetVia)
-            let exclusions = how(directly: excludedDirectly, via: excludeVia)
+            let route = routes(scope, to: device, kind: p.kind, groupLabel: groupLabel)
+            let targets = route.targets, exclusions = route.exclusions
             let installedIndex = device.installedIndex(of: profile, kind: p.kind)
             if let installedIndex { matchedInstalled.insert(installedIndex) }
             guard !targets.isEmpty || !exclusions.isEmpty || installedIndex != nil else { continue }
@@ -761,8 +789,10 @@ enum AuditReports {
                 detail = "Not scoped to this device"
             }
             var finding = objectFinding(profile, detail)
-            finding.directScope = DirectScope(targetedDirectly: targetedDirectly, targetedByUser: location.targetedByUser,
-                                              excludedDirectly: excludedDirectly, excludedByUser: location.excludedByUser)
+            finding.directScope = DirectScope(targetedDirectly: route.targetedDirectly,
+                                              targetedByUser: route.location.targetedByUser,
+                                              excludedDirectly: route.excludedDirectly,
+                                              excludedByUser: route.location.excludedByUser)
             finding.installed = installedIndex != nil
             findings.append(finding)
         }
@@ -785,6 +815,63 @@ enum AuditReports {
         return AuditOutput(findings: findings, scanned: profiles.count + device.installed.count,
                            subject: AuditSubject(kind: p.kind, id: device.id, name: device.name),
                            subtitle: "\(p.kind.label) · \(targetedCount) profile(s) targeting this device")
+    }
+
+    /// Every device that a profile both targets and excludes, by any route: e.g.
+    /// targeted through a group and excluded through another group, its user or
+    /// its department. The exclusion wins, so these devices don't get the profile.
+    static func devicesTargetedAndExcluded(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+        let kind = p.kind
+        let profiles = try await context.scopedObjects([AuditObjects.profileType(kind)])
+        let scoped = profiles.map { ($0, ScopeReading.scope(of: $0.root, kind: kind)) }.filter { $0.1.hasExclusions }
+        let subtitle = "\(kind.label) · \(scoped.count) of \(profiles.count) profile(s) have exclusions"
+        guard !scoped.isEmpty else { return AuditOutput(findings: [], scanned: profiles.count, subtitle: subtitle) }
+
+        let devices = try await context.inventory(kind)
+        var groupIDs = Set<String>(), userGroupIDs = Set<String>()
+        for (_, scope) in scoped {
+            groupIDs.formUnion(scope.groups.keys)
+            groupIDs.formUnion(scope.excludedGroups.keys)
+            userGroupIDs.formUnion(scope.userGroups.keys)
+            userGroupIDs.formUnion(scope.excludedUserGroups.keys)
+        }
+        let groups = try await context.groups(kind, ids: groupIDs)
+        let userGroupMembers = try await context.userGroupMembers(userGroupIDs.filter { !$0.hasPrefix("#") })
+        var memberships: [String: Set<String>] = [:]   // device id → group ids
+        for group in groups.values {
+            for member in group.members { memberships[member.id, default: []].insert(group.id) }
+        }
+        func groupLabel(_ id: String, _ name: String) -> String {
+            let shown = name.isEmpty ? (groups[id]?.name ?? "ID \(id)") : name
+            return "\(groups[id]?.isSmart == true ? "smart" : "static") group “\(shown)”"
+        }
+
+        await context.status("Checking \(devices.count) \(kind.pluralLabel) against \(scoped.count) profile(s)…")
+        var findings: [AuditFinding] = []
+        for device in devices {
+            try Task.checkCancellation()
+            let username = device.username.trimmingCharacters(in: .whitespaces).lowercased()
+            let facts = DeviceFacts(id: device.id, name: device.name, groupIDs: memberships[device.id] ?? [],
+                                    groupNames: [], installed: [], username: username,
+                                    building: device.building, department: device.department,
+                                    userGroupIDs: username.isEmpty ? []
+                                        : Set(userGroupMembers.filter { $0.value.contains(username) }.keys),
+                                    buildingID: device.buildingID, departmentID: device.departmentID)
+            for (profile, scope) in scoped {
+                let route = routes(scope, to: facts, kind: kind, groupLabel: groupLabel)
+                guard !route.targets.isEmpty, !route.exclusions.isEmpty else { continue }
+                var finding = objectFinding(profile, route.targets)
+                finding.device = FindingDevice(kind: kind, id: device.id, name: device.name.isEmpty ? "ID \(device.id)" : device.name)
+                finding.excludedVia = route.exclusions
+                findings.append(finding)
+            }
+        }
+        findings.sort {
+            let byProfile = $0.objectName.localizedStandardCompare($1.objectName)
+            return byProfile != .orderedSame ? byProfile == .orderedAscending
+                : $0.deviceName.localizedStandardCompare($1.deviceName) == .orderedAscending
+        }
+        return AuditOutput(findings: findings, scanned: profiles.count + devices.count, subtitle: subtitle)
     }
 
     // MARK: - Device health

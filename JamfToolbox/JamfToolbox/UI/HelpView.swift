@@ -94,7 +94,7 @@ private let helpSections: [HelpSection] = [
             + "category and a report, fill in its options, and click Run Audit. Static Groups: Group Dependencies, "
             + "Empty Groups, Unused Groups, Stale Group Members, Duplicate Group Names, Compare Group to a List, "
             + "and a device's Group Memberships. Configuration Profiles: Unscoped or Scoped to All, Included and "
-            + "Excluded, Deleted or Empty Groups in Scope, Overlapping Payloads, Failed or Pending Installs, a device's "
+            + "Excluded, Devices Targeted and Excluded, Deleted or Empty Groups in Scope, Overlapping Payloads, Failed or Pending Installs, a device's "
             + "Profiles vs. Scope, and a device's Config Profiles in Scope (how each profile reaches it, with Exclude and Remove Target actions). Device Health: Stale Check-in, Unsupervised Mobile Devices, OS Below "
             + "Target, FileVault Off, No Assigned User, Duplicate Serial Numbers, Pending MDM Commands. Policies: "
             + "Disabled but Still Scoped, Enabled with No Scope, Recent Failures, Ongoing with No Trigger.",
