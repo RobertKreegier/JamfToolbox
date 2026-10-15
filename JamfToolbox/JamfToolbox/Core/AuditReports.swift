@@ -110,7 +110,7 @@ enum AuditReports {
                     summary: "Compares the profiles installed on one device with the profiles scoped to it: what's missing, and what's installed but no longer scoped.",
                     inputs: [.kind, .device], detailHeading: "Status", run: deviceProfiles),
         AuditReport(id: "profiles-device-targeting", category: .profiles, title: "Device's Config Profiles in Scope",
-                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user. Right-click profiles to exclude the device from them or remove a direct target.",
+                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user, building or department. Right-click profiles to exclude the device from them or remove a direct target.",
                     inputs: [.kind, .device], detailHeading: "Targeting", run: deviceProfileTargeting),
 
         // Device health
@@ -575,6 +575,38 @@ enum AuditReports {
         let installed: [(id: String, name: String, uuid: String)]
         /// The assigned user's username, lower-cased ("" if none).
         let username: String
+        /// From User and Location, as names ("" if none).
+        let building: String
+        let department: String
+
+        /// How the device's assigned user, building and department reach a
+        /// profile's scope: "user “jdoe”", "department “Tech”", ….
+        struct LocationMatch {
+            var targets: [String] = []
+            var exclusions: [String] = []
+            var targetedByUser = false
+            var excludedByUser = false
+        }
+
+        func locationMatch(_ scope: ScopeReading.Scope) -> LocationMatch {
+            var match = LocationMatch()
+            func has(_ names: [String: String], _ value: String) -> Bool {
+                !value.isEmpty && names.values.contains { $0.caseInsensitiveCompare(value) == .orderedSame }
+            }
+            if !username.isEmpty && scope.users.contains(username) {
+                match.targetedByUser = true
+                match.targets.append("user “\(username)”")
+            }
+            if has(scope.buildings, building) { match.targets.append("building “\(building)”") }
+            if has(scope.departments, department) { match.targets.append("department “\(department)”") }
+            if !username.isEmpty && scope.excludedUsers.contains(username) {
+                match.excludedByUser = true
+                match.exclusions.append("user “\(username)”")
+            }
+            if has(scope.excludedBuildings, building) { match.exclusions.append("building “\(building)”") }
+            if has(scope.excludedDepartments, department) { match.exclusions.append("department “\(department)”") }
+            return match
+        }
 
         func inGroup(_ id: String, _ name: String) -> Bool {
             groupIDs.contains(id) || (!name.isEmpty && groupNames.contains(name.lowercased()))
@@ -612,8 +644,11 @@ enum AuditReports {
             (AuditObjects.entryID(item) ?? "", (item["display_name"] ?? item["name"])?.text ?? "", item["uuid"]?.text ?? "")
         }
         let username = (record["location"]?["username"]?.text ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        func location(_ key: String) -> String {
+            (record["location"]?[key]?.text ?? "").trimmingCharacters(in: .whitespaces)
+        }
         return DeviceFacts(id: deviceID, name: name, groupIDs: groupIDs, groupNames: groupNames, installed: installed,
-                           username: username)
+                           username: username, building: location("building"), department: location("department"))
     }
 
     static func deviceProfiles(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
@@ -627,12 +662,14 @@ enum AuditReports {
         var unevaluated: [String] = []
         for profile in profiles {
             let scope = ScopeReading.scope(of: profile.root, kind: p.kind)
-            let user = device.username
+            let location = device.locationMatch(scope)
             let excluded = scope.excludedDevices.contains(deviceID)
-                || scope.excludedGroups.contains { inGroup($0.key, $0.value) }
-                || (!user.isEmpty && scope.excludedUsers.contains(user))
+                || scope.excludedGroups.contains { inGroup($0.key, $0.value) } || !location.exclusions.isEmpty
             let targeted = scope.all || scope.devices.contains(deviceID) || scope.groups.contains { inGroup($0.key, $0.value) }
-                || (!user.isEmpty && scope.users.contains(user))
+                || !location.targets.isEmpty
+            // Not targeted as far as this report can tell, but scoped by something it can't check.
+            let unchecked = !targeted && !excluded && !scope.uncheckedTargets.isEmpty
+            if unchecked { unevaluated.append(unevaluatedText(profile, scope)) }
             let expected = targeted && !excluded
             let installedIndex = device.installedIndex(of: profile, kind: p.kind)
             if let installedIndex { matchedInstalled.insert(installedIndex) }
@@ -641,9 +678,8 @@ enum AuditReports {
                 findings.append(objectFinding(profile, "Scoped to this device but not installed"))
             } else if !expected && installedIndex != nil {
                 findings.append(objectFinding(profile, excluded ? "Installed, but the device is excluded"
-                                                                : "Installed, but no longer scoped to this device"))
-            } else if !expected && installedIndex == nil && scope.otherTargets.contains(where: { $0 != "jss users" }) {
-                unevaluated.append(unevaluatedText(profile, scope))
+                                              : unchecked ? "Installed; may be scoped by user group (not checked)"
+                                              : "Installed, but no longer scoped to this device"))
             }
         }
         for (index, item) in installed.enumerated() where !matchedInstalled.contains(index) {
@@ -654,7 +690,7 @@ enum AuditReports {
         var warnings: [String] = []
         var warningDetails: [String: String] = [:]
         if !unevaluated.isEmpty {
-            let warning = "\(unevaluated.count) profile(s) are scoped by building, department or user group, which this report doesn't evaluate."
+            let warning = "\(unevaluated.count) profile(s) are scoped by user group, which this report doesn't check, so they may also apply to this device."
             warnings.append(warning)
             warningDetails[warning] = unevaluated.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
                 .map { "• \($0)" }.joined(separator: "\n")
@@ -668,7 +704,7 @@ enum AuditReports {
     /// "Name — buildings: High School; user groups: Staff", for profiles a
     /// device report can't evaluate.
     private static func unevaluatedText(_ profile: ScopedObject, _ scope: ScopeReading.Scope) -> String {
-        let parts = scope.otherTargets.filter { $0 != "jss users" }.map { key -> String in
+        let parts = scope.uncheckedTargets.map { key -> String in
             let items = profile.root["scope"]?[key.replacingOccurrences(of: " ", with: "_")]?.arrayValue ?? []
             let names = items.map { AuditObjects.entryName($0) }.filter { !$0.isEmpty }
             let label = key == "jss user groups" ? "user groups" : key
@@ -708,36 +744,33 @@ enum AuditReports {
                 targetVia.append(groupLabel(id, name))
             }
             let targetedDirectly = scope.devices.contains(device.id)
-            let user = device.username
-            let targetedByUser = !user.isEmpty && scope.users.contains(user)
-            if targetedByUser { targetVia.append("user “\(user)”") }
+            let location = device.locationMatch(scope)
+            targetVia += location.targets
             var excludeVia: [String] = []
             for (id, name) in scope.excludedGroups.sorted(by: { $0.value < $1.value }) where device.inGroup(id, name) {
                 excludeVia.append(groupLabel(id, name))
             }
             let excludedDirectly = scope.excludedDevices.contains(device.id)
-            let excludedByUser = !user.isEmpty && scope.excludedUsers.contains(user)
-            if excludedByUser { excludeVia.append("user “\(user)”") }
+            excludeVia += location.exclusions
             let targets = how(directly: targetedDirectly, via: targetVia)
             let exclusions = how(directly: excludedDirectly, via: excludeVia)
             let installedIndex = device.installedIndex(of: profile, kind: p.kind)
             if let installedIndex { matchedInstalled.insert(installedIndex) }
-            guard !targets.isEmpty || !exclusions.isEmpty || installedIndex != nil else {
-                // Jamf user targets are evaluated above, against the assigned user.
-                if scope.otherTargets.contains(where: { $0 != "jss users" }) { unevaluated.append(unevaluatedText(profile, scope)) }
-                continue
-            }
+            // Not targeted as far as this report can tell, but scoped by something it can't check.
+            let unchecked = targets.isEmpty && exclusions.isEmpty && !scope.uncheckedTargets.isEmpty
+            if unchecked { unevaluated.append(unevaluatedText(profile, scope)) }
+            guard !targets.isEmpty || !exclusions.isEmpty || installedIndex != nil else { continue }
             let detail: String
             if !exclusions.isEmpty {
                 detail = "Excluded \(exclusions)" + (targets.isEmpty ? "" : " (targeted \(targets))")
             } else if !targets.isEmpty {
                 detail = "Targeted \(targets)"
             } else {
-                detail = "Not scoped to this device"
+                detail = unchecked ? "May be scoped by user group (not checked)" : "Not scoped to this device"
             }
             var finding = objectFinding(profile, detail)
-            finding.directScope = DirectScope(targetedDirectly: targetedDirectly, targetedByUser: targetedByUser,
-                                              excludedDirectly: excludedDirectly, excludedByUser: excludedByUser)
+            finding.directScope = DirectScope(targetedDirectly: targetedDirectly, targetedByUser: location.targetedByUser,
+                                              excludedDirectly: excludedDirectly, excludedByUser: location.excludedByUser)
             finding.installed = installedIndex != nil
             findings.append(finding)
         }
@@ -760,7 +793,7 @@ enum AuditReports {
         var warnings: [String] = []
         var warningDetails: [String: String] = [:]
         if !unevaluated.isEmpty {
-            let warning = "\(unevaluated.count) profile(s) are scoped by building, department or user group, which this report doesn't evaluate."
+            let warning = "\(unevaluated.count) profile(s) are scoped by user group, which this report doesn't check, so they may also apply to this device."
             warnings.append(warning)
             warningDetails[warning] = unevaluated.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
                 .map { "• \($0)" }.joined(separator: "\n")

@@ -387,9 +387,20 @@ enum ScopeReading {
         /// Jamf user targets and exclusions, by lower-cased username.
         var users: Set<String> = []
         var excludedUsers: Set<String> = []
+        /// Building and department targets and exclusions, id → name.
+        var buildings: [String: String] = [:]
+        var departments: [String: String] = [:]
+        var excludedBuildings: [String: String] = [:]
+        var excludedDepartments: [String: String] = [:]
+
+        /// Target lists a device report can't check against one device's record
+        /// (user groups, and anything else besides users, buildings and departments).
+        var uncheckedTargets: [String] { otherTargets.filter { !["jss users", "buildings", "departments"].contains($0) } }
 
         var isEmpty: Bool { !all && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
-        var hasExclusions: Bool { !excludedDevices.isEmpty || !excludedGroups.isEmpty }
+        /// True when any exclusion list is non-empty (devices, groups, users, buildings, departments, network segments…).
+        var hasAnyExclusion = false
+        var hasExclusions: Bool { hasAnyExclusion || !excludedDevices.isEmpty || !excludedGroups.isEmpty }
     }
 
     static func scope(of root: JSONValue, kind: GroupKind) -> Scope {
@@ -410,17 +421,32 @@ enum ScopeReading {
                 }
             default:
                 if entry.key == "jss_users" { result.users = userNames(entry.value) }
+                if entry.key == "buildings" { result.buildings = idNames(entry.value) }
+                if entry.key == "departments" { result.departments = idNames(entry.value) }
                 if let items = entry.value.arrayValue, !items.isEmpty {
                     result.otherTargets.append(entry.key.replacingOccurrences(of: "_", with: " "))
                 }
             }
         }
         if let exclusions = root["scope"]?["exclusions"] {
+            if case .object(let lists) = exclusions {
+                result.hasAnyExclusion = lists.contains { !($0.value.arrayValue ?? []).isEmpty }
+            }
             result.excludedDevices = Set((exclusions[kind.membersKey]?.arrayValue ?? []).compactMap(AuditObjects.entryID))
             for group in exclusions[kind.scopeKey]?.arrayValue ?? [] {
                 if let id = AuditObjects.entryID(group) { result.excludedGroups[id] = AuditObjects.entryName(group) }
             }
             result.excludedUsers = userNames(exclusions["jss_users"] ?? .array([]))
+            result.excludedBuildings = idNames(exclusions["buildings"] ?? .array([]))
+            result.excludedDepartments = idNames(exclusions["departments"] ?? .array([]))
+        }
+        return result
+    }
+
+    private static func idNames(_ list: JSONValue) -> [String: String] {
+        var result: [String: String] = [:]
+        for (index, item) in (list.arrayValue ?? []).enumerated() {
+            result[AuditObjects.entryID(item) ?? "#\(index)"] = AuditObjects.entryName(item)
         }
         return result
     }
