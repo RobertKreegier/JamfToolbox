@@ -276,10 +276,14 @@ final class AuditContext {
         throw lastError ?? ServiceError("Couldn't read \(noun).")
     }
 
+    /// Reads an inventory record. Mobile devices come in two shapes, depending
+    /// on the Jamf Pro version: grouped into sections (`mobileDeviceId`,
+    /// `general`, `hardware`, `userAndLocation`), or flat (`id`, `name`,
+    /// `serialNumber`, `location`, with platform details under `ios`/`tvos`…).
     private static func device(_ json: JSONValue, kind: GroupKind) -> DeviceRecord? {
         let general = json["general"] ?? .emptyObject
         let hardware = json["hardware"] ?? .emptyObject
-        let user = json["userAndLocation"] ?? .emptyObject
+        let user = json["userAndLocation"] ?? json["location"] ?? .emptyObject
         func text(_ values: JSONValue?...) -> String { values.compactMap { $0?.text }.first { !$0.isEmpty } ?? "" }
         func flag(_ value: JSONValue?) -> Bool? {
             guard let value else { return nil }
@@ -302,12 +306,16 @@ final class AuditContext {
                 fileVaultState: text(encryption["bootPartitionEncryptionDetails"]?["partitionFileVault2State"],
                                      json["operatingSystem"]?["fileVault2Status"]))
         case .mobile:
+            let platform = ["ios", "tvos", "watchos", "visionos"].lazy.compactMap { json[$0] }
+                .first { if case .object = $0 { return true } else { return false } } ?? .emptyObject
             record = DeviceRecord(
-                kind: kind, id: id, name: text(general["displayName"], general["name"]),
-                serial: text(hardware["serialNumber"]), username: text(user["username"]),
-                osVersion: text(general["osVersion"]), managementID: text(general["managementId"]),
-                lastSeen: parseJamfDate(text(general["lastInventoryUpdateDate"])),
-                supervised: flag(general["supervised"]), managed: flag(general["managed"]),
+                kind: kind, id: id, name: text(general["displayName"], general["name"], json["name"]),
+                serial: text(hardware["serialNumber"], json["serialNumber"]), username: text(user["username"]),
+                osVersion: text(general["osVersion"], json["osVersion"]),
+                managementID: text(general["managementId"], json["managementId"]),
+                lastSeen: parseJamfDate(text(general["lastInventoryUpdateDate"], json["lastInventoryUpdateTimestamp"])),
+                supervised: flag(general["supervised"]) ?? flag(platform["supervised"]),
+                managed: flag(general["managed"]) ?? flag(json["managed"]),
                 fileVaultEnabled: nil, fileVaultState: "")
         }
         record.buildingID = text(user["buildingId"])
