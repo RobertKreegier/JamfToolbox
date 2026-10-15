@@ -205,8 +205,14 @@ final class AuditCenter: ObservableObject {
         let response: NSApplication.ModalResponse
         if let window = Dialogs.anchor { response = await panel.beginSheetModal(for: window) } else { response = panel.runModal() }
         guard response == .OK, let url = panel.url else { return }
-        var lines = [ListExport.csvLine(["Type", "Name", result.detailHeading, "Jamf ID"])]
-        lines += result.findings.map { ListExport.csvLine([$0.objectType, $0.objectName, $0.detail, $0.objectID]) }
+        var lines: [String]
+        if result.findings.contains(where: { $0.installed != nil }) {   // a device's profiles
+            lines = [ListExport.csvLine(["Name", result.detailHeading, "Installed", "Type", "Jamf ID"])]
+            lines += result.findings.map { ListExport.csvLine([$0.objectName, $0.detail, $0.installedText, $0.objectType, $0.objectID]) }
+        } else {
+            lines = [ListExport.csvLine(["Type", "Name", result.detailHeading, "Jamf ID"])]
+            lines += result.findings.map { ListExport.csvLine([$0.objectType, $0.objectName, $0.detail, $0.objectID]) }
+        }
         do {
             try (Data([0xEF, 0xBB, 0xBF]) + Data((lines.joined(separator: "\r\n") + "\r\n").utf8)).write(to: url, options: .atomic)
             model?.log.add("Exported audit result to \(url.lastPathComponent).")

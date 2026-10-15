@@ -352,38 +352,17 @@ private struct AuditResultView: View {
             header
             summary
             ForEach(result.warnings, id: \.self) { warning in
-                Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
+                WarningLine(warning: warning, details: result.warningDetails?[warning])
             }
             if !result.findings.isEmpty {
-                Table(result.findings.sorted(using: sortOrder), selection: $findingSelection, sortOrder: $sortOrder) {
-                    TableColumn("Type", value: \.objectType)
-                        .width(min: 90, ideal: 140)
-                    TableColumn("Name", value: \.objectName)
-                        .width(min: 80, ideal: 140)
-                    TableColumn(result.detailHeading, value: \.detail) { finding in
-                        Text(finding.detail).help(finding.detail)   // full text on hover when truncated
-                    }
-                    .width(min: 120, ideal: 360)
-                    TableColumn("ID", value: \.objectID)
-                        .width(min: 40, ideal: 50)
-                }
-                .contextMenu(forSelectionType: AuditFinding.ID.self) { ids in
-                    Button("Open in Jamf Pro") { open(ids) }
-                        .disabled(!canOpen(ids))
-                    Button("Copy Name") { copy(ids, \.objectName) }
-                    Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
-                    if offersScopeChanges {
-                        Divider()
-                        scopeChangeButtons(ids)
-                    }
-                } primaryAction: { ids in open(ids) }
+                findingsTable
+                    .contextMenu(forSelectionType: AuditFinding.ID.self) { ids in
+                        contextMenu(ids)
+                    } primaryAction: { ids in open(ids) }
                 Text(offersScopeChanges
-                     ? "Select profiles, then use Change Scope (or right-click) to exclude this device or remove a "
-                        + "direct target. Double-click a row to view it in Jamf Pro."
-                     : "Double-click a row, or select rows and click Open in Jamf Pro, to view them in Jamf Pro. "
-                        + "Right-click for more.")
+                     ? "Right-click profiles to exclude this device, remove a direct target, copy, export or open "
+                        + "them in Jamf Pro. Double-click a row to view it in Jamf Pro."
+                     : "Double-click a row to view it in Jamf Pro. Right-click for more.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -392,6 +371,73 @@ private struct AuditResultView: View {
             footer
         }
         .padding(14)
+    }
+
+    /// A device's profiles get Name, Targeting, Installed and Type; other
+    /// reports get Type, Name, their detail and the Jamf ID.
+    @ViewBuilder
+    private var findingsTable: some View {
+        let rows = result.findings.sorted(using: sortOrder)
+        if result.findings.contains(where: { $0.installed != nil }) {
+            Table(rows, selection: $findingSelection, sortOrder: $sortOrder) {
+                TableColumn("Name", value: \.objectName)
+                    .width(min: 80, ideal: 170)
+                TableColumn(result.detailHeading, value: \.detail) { finding in
+                    Text(finding.detail).help(finding.detail)   // full text on hover when truncated
+                }
+                .width(min: 120, ideal: 320)
+                TableColumn("Installed", value: \.installedText)
+                    .width(min: 55, ideal: 60, max: 90)
+                TableColumn("Type", value: \.objectType) { finding in
+                    Text(finding.objectType).help(finding.objectType)
+                }
+                .width(min: 80, ideal: 130)
+            }
+        } else {
+            Table(rows, selection: $findingSelection, sortOrder: $sortOrder) {
+                TableColumn("Type", value: \.objectType)
+                    .width(min: 90, ideal: 140)
+                TableColumn("Name", value: \.objectName)
+                    .width(min: 80, ideal: 140)
+                TableColumn(result.detailHeading, value: \.detail) { finding in
+                    Text(finding.detail).help(finding.detail)
+                }
+                .width(min: 120, ideal: 360)
+                TableColumn("ID", value: \.objectID)
+                    .width(min: 40, ideal: 50)
+            }
+        }
+    }
+
+    /// Scope changes (for a device's profiles), Copy, Export CSV, Open in Jamf Pro.
+    @ViewBuilder
+    private func contextMenu(_ ids: Set<AuditFinding.ID>) -> some View {
+        if offersScopeChanges {
+            let selected = findings(ids)
+            // One item for exclusions: Remove Exclusion when every selected profile
+            // already excludes the device (directly or by its user), else Exclude.
+            let scoped = selected.filter { $0.directScope != nil }
+            let allExcluded = !scoped.isEmpty && scoped.allSatisfy { $0.directScope!.allows(.removeExclusion) }
+            scopeChangeButton(allExcluded ? .removeExclusion : .exclude, selected)
+            scopeChangeButton(.removeTarget, selected)
+            Divider()
+        }
+        Menu("Copy") {
+            Button("Copy Name") { copy(ids, \.objectName) }
+            Button("Copy \(result.detailHeading)") { copy(ids, \.detail) }
+        }
+        Button("Export CSV…") { Task { await center.exportCSV(result) } }
+        Divider()
+        Button("Open in Jamf Pro") { open(ids) }
+            .disabled(!canOpen(ids))
+    }
+
+    private func scopeChangeButton(_ change: ScopeChange, _ selected: [AuditFinding]) -> some View {
+        let count = center.candidates(change, in: selected).count
+        return Button(change.title + (count > 1 ? " (\(count) Profiles)…" : "…")) {
+            Task { await center.applyScopeChange(change, to: selected, in: result) }
+        }
+        .disabled(count == 0 || center.isRunning || center.changingScope)
     }
 
     /// The audit's name, then labeled lines so each piece of information is easy to pick out.
@@ -446,46 +492,21 @@ private struct AuditResultView: View {
 
     private var footer: some View {
         HStack {
-            Button("Run Again") { center.rerun(result) }
-                .disabled(center.isRunning || AuditReports.report(result.reportID) == nil)
-                .help("Run this audit again with the same options, against the current server")
+            Button("Re-run Report") { center.rerun(result, replacing: true) }
+                .disabled(center.isRunning || center.changingScope || AuditReports.report(result.reportID) == nil)
+                .help("Run this report again and replace this result with the fresh one")
+            Button("Repeat Report") { center.rerun(result) }
+                .disabled(center.isRunning || center.changingScope || AuditReports.report(result.reportID) == nil)
+                .help("Run this report again with the same options as a new saved result, keeping this one")
+            Spacer()
             Button("Export CSV…") { Task { await center.exportCSV(result) } }
                 .disabled(result.findings.isEmpty)
-            if offersScopeChanges {
-                Menu("Change Scope") { scopeChangeButtons(findingSelection) }
-                    .fixedSize()
-                    .disabled(center.isRunning || center.changingScope)
-                    .help("Exclude this device from the selected profiles, or remove it as a direct target")
-            }
-            Spacer()
-            Button("Open in Jamf Pro") { open(findingSelection) }
-                .disabled(!canOpen(findingSelection))
-                .help("Open the selected findings in Jamf Pro (or double-click a row)")
-            Button("Delete Result", role: .destructive) {
-                Task {
-                    if await Dialogs.confirm("Delete this saved result? This can't be undone.", yes: "Delete", no: "Cancel") {
-                        center.delete([result.id])
-                    }
-                }
-            }
         }
     }
 
     /// Results whose rows carry how the device is directly scoped (a device's
     /// Config Profiles in Scope).
     private var offersScopeChanges: Bool { result.findings.contains { $0.directScope != nil } }
-
-    @ViewBuilder
-    private func scopeChangeButtons(_ ids: Set<AuditFinding.ID>) -> some View {
-        let selected = findings(ids)
-        ForEach(ScopeChange.allCases, id: \.self) { change in
-            let count = center.candidates(change, in: selected).count
-            Button(change.title + (count > 1 ? " (\(count) Profiles)…" : "…")) {
-                Task { await center.applyScopeChange(change, to: selected, in: result) }
-            }
-            .disabled(count == 0 || center.isRunning || center.changingScope)
-        }
-    }
 
     private func findings(_ ids: Set<AuditFinding.ID>) -> [AuditFinding] {
         result.findings.filter { ids.contains($0.id) }
@@ -507,6 +528,38 @@ private struct AuditResultView: View {
         let values = findings(ids).map { $0[keyPath: field] }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(values.joined(separator: "\n"), forType: .string)
+    }
+}
+
+/// A caveat on a result. When there's more to it (e.g. which profiles weren't
+/// evaluated), it shows on hover and from a Details button.
+private struct WarningLine: View {
+    let warning: String
+    let details: String?
+    @State private var showing = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.callout)
+                .help(details ?? warning)
+            if let details {
+                Button("Details") { showing.toggle() }
+                    .buttonStyle(.link)
+                    .font(.callout)
+                    .popover(isPresented: $showing, arrowEdge: .bottom) {
+                        ScrollView {
+                            Text(details)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                        }
+                        .frame(width: 420)
+                        .frame(maxHeight: 320)
+                    }
+            }
+        }
     }
 }
 

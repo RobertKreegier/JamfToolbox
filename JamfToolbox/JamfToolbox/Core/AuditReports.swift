@@ -27,6 +27,7 @@ struct AuditOutput {
     var subject: AuditSubject? = nil
     var subtitle: String
     var warnings: [String] = []
+    var warningDetails: [String: String] = [:]
 }
 
 struct AuditReport: Identifiable {
@@ -58,7 +59,9 @@ enum AuditReports {
         return AuditResult(reportID: report.id, report: report.title, runAt: Date(), server: client.baseURL,
                            subject: output.subject, subtitle: output.subtitle, detailHeading: report.detailHeading,
                            parameters: parameters, findings: output.findings,
-                           warnings: context.warnings + output.warnings, objectsScanned: output.scanned)
+                           warnings: context.warnings + output.warnings,
+                           warningDetails: output.warningDetails.isEmpty ? nil : output.warningDetails,
+                           objectsScanned: output.scanned)
     }
 
     // MARK: Catalog
@@ -107,7 +110,7 @@ enum AuditReports {
                     summary: "Compares the profiles installed on one device with the profiles scoped to it: what's missing, and what's installed but no longer scoped.",
                     inputs: [.kind, .device], detailHeading: "Status", run: deviceProfiles),
         AuditReport(id: "profiles-device-targeting", category: .profiles, title: "Device's Config Profiles in Scope",
-                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user. Select profiles to exclude the device from them, or to remove a direct target.",
+                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user. Right-click profiles to exclude the device from them or remove a direct target.",
                     inputs: [.kind, .device], detailHeading: "Targeting", run: deviceProfileTargeting),
 
         // Device health
@@ -621,7 +624,7 @@ enum AuditReports {
         let profiles = try await context.scopedObjects([AuditObjects.profileType(p.kind)])
         var findings: [AuditFinding] = []
         var matchedInstalled = Set<Int>()
-        var unevaluated = 0
+        var unevaluated: [String] = []
         for profile in profiles {
             let scope = ScopeReading.scope(of: profile.root, kind: p.kind)
             let user = device.username
@@ -640,7 +643,7 @@ enum AuditReports {
                 findings.append(objectFinding(profile, excluded ? "Installed, but the device is excluded"
                                                                 : "Installed, but no longer scoped to this device"))
             } else if !expected && installedIndex == nil && scope.otherTargets.contains(where: { $0 != "jss users" }) {
-                unevaluated += 1
+                unevaluated.append(unevaluatedText(profile, scope))
             }
         }
         for (index, item) in installed.enumerated() where !matchedInstalled.contains(index) {
@@ -649,13 +652,29 @@ enum AuditReports {
                                          detail: "Installed, not a Jamf configuration profile (e.g. the MDM profile)"))
         }
         var warnings: [String] = []
-        if unevaluated > 0 {
-            warnings.append("\(unevaluated) profile(s) are scoped by building, department or user group, which this report doesn't evaluate.")
+        var warningDetails: [String: String] = [:]
+        if !unevaluated.isEmpty {
+            let warning = "\(unevaluated.count) profile(s) are scoped by building, department or user group, which this report doesn't evaluate."
+            warnings.append(warning)
+            warningDetails[warning] = unevaluated.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+                .map { "• \($0)" }.joined(separator: "\n")
         }
         return AuditOutput(findings: sortFindings(findings), scanned: profiles.count + installed.count,
                            subject: AuditSubject(kind: p.kind, id: deviceID, name: name),
                            subtitle: "\(p.kind.label) · \(installed.count) installed profile(s) vs. \(profiles.count) in Jamf",
-                           warnings: warnings)
+                           warnings: warnings, warningDetails: warningDetails)
+    }
+
+    /// "Name — buildings: High School; user groups: Staff", for profiles a
+    /// device report can't evaluate.
+    private static func unevaluatedText(_ profile: ScopedObject, _ scope: ScopeReading.Scope) -> String {
+        let parts = scope.otherTargets.filter { $0 != "jss users" }.map { key -> String in
+            let items = profile.root["scope"]?[key.replacingOccurrences(of: " ", with: "_")]?.arrayValue ?? []
+            let names = items.map { AuditObjects.entryName($0) }.filter { !$0.isEmpty }
+            let label = key == "jss user groups" ? "user groups" : key
+            return names.isEmpty ? label : "\(label): \(names.joined(separator: ", "))"
+        }
+        return "\(profile.name) — \(parts.joined(separator: "; "))"
     }
 
     /// "directly", "via static group “X”", "directly and via all mobile devices", or "".
@@ -680,7 +699,7 @@ enum AuditReports {
         let profiles = try await context.scopedObjects([AuditObjects.profileType(p.kind)])
         var findings: [AuditFinding] = []
         var matchedInstalled = Set<Int>()
-        var unevaluated = 0
+        var unevaluated: [String] = []
         for profile in profiles {
             let scope = ScopeReading.scope(of: profile.root, kind: p.kind)
             var targetVia: [String] = []
@@ -705,27 +724,28 @@ enum AuditReports {
             if let installedIndex { matchedInstalled.insert(installedIndex) }
             guard !targets.isEmpty || !exclusions.isEmpty || installedIndex != nil else {
                 // Jamf user targets are evaluated above, against the assigned user.
-                if scope.otherTargets.contains(where: { $0 != "jss users" }) { unevaluated += 1 }
+                if scope.otherTargets.contains(where: { $0 != "jss users" }) { unevaluated.append(unevaluatedText(profile, scope)) }
                 continue
             }
-            let installedText = installedIndex == nil ? "Not installed" : "Installed"
             let detail: String
             if !exclusions.isEmpty {
-                detail = "Excluded \(exclusions)" + (targets.isEmpty ? "" : " (targeted \(targets))") + " · \(installedText)"
+                detail = "Excluded \(exclusions)" + (targets.isEmpty ? "" : " (targeted \(targets))")
             } else if !targets.isEmpty {
-                detail = "Targeted \(targets) · \(installedText)"
+                detail = "Targeted \(targets)"
             } else {
-                detail = "Not scoped to this device · \(installedText)"
+                detail = "Not scoped to this device"
             }
             var finding = objectFinding(profile, detail)
             finding.directScope = DirectScope(targetedDirectly: targetedDirectly, targetedByUser: targetedByUser,
                                               excludedDirectly: excludedDirectly, excludedByUser: excludedByUser)
+            finding.installed = installedIndex != nil
             findings.append(finding)
         }
         for (index, item) in device.installed.enumerated() where !matchedInstalled.contains(index) {
             let label = item.name.isEmpty ? (item.uuid.isEmpty ? "ID \(item.id)" : item.uuid) : item.name
             findings.append(AuditFinding(objectType: "Installed Profile", objectName: label, objectID: "",
-                                         detail: "Installed, not a Jamf configuration profile (e.g. the MDM profile)"))
+                                         detail: "Not a Jamf configuration profile (e.g. the MDM profile)",
+                                         installed: true))
         }
         // Targeted first, then excluded, then installed-only, each alphabetical.
         func rank(_ finding: AuditFinding) -> Int {
@@ -738,13 +758,17 @@ enum AuditReports {
         }
         let targetedCount = findings.filter { rank($0) == 0 }.count
         var warnings: [String] = []
-        if unevaluated > 0 {
-            warnings.append("\(unevaluated) profile(s) are scoped by building, department or user group, which this report doesn't evaluate.")
+        var warningDetails: [String: String] = [:]
+        if !unevaluated.isEmpty {
+            let warning = "\(unevaluated.count) profile(s) are scoped by building, department or user group, which this report doesn't evaluate."
+            warnings.append(warning)
+            warningDetails[warning] = unevaluated.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+                .map { "• \($0)" }.joined(separator: "\n")
         }
         return AuditOutput(findings: findings, scanned: profiles.count + device.installed.count,
                            subject: AuditSubject(kind: p.kind, id: device.id, name: device.name),
                            subtitle: "\(p.kind.label) · \(targetedCount) profile(s) targeting this device",
-                           warnings: warnings)
+                           warnings: warnings, warningDetails: warningDetails)
     }
 
     // MARK: - Device health

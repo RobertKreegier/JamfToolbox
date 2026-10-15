@@ -90,7 +90,7 @@ private let helpSections: [HelpSection] = [
             + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
             + "for a command, nothing is sent and the message names the privilege to ask for.",
         "Jamf Audits: the third tab runs reports against Jamf Pro and keeps the results. Reports only read; the "
-            + "one exception is Config Profiles in Scope, whose Change Scope menu edits a profile's scope after asking. Choose a "
+            + "one exception is Config Profiles in Scope, whose right-click menu can exclude a device from profiles or remove a direct target, after asking. Choose a "
             + "category and a report, fill in its options, and click Run Audit. Static Groups: Group Dependencies, "
             + "Empty Groups, Unused Groups, Stale Group Members, Duplicate Group Names, Compare Group to a List, "
             + "and a device's Group Memberships. Configuration Profiles: Unscoped or Scoped to All, Included and "
@@ -100,9 +100,9 @@ private let helpSections: [HelpSection] = [
             + "Disabled but Still Scoped, Enabled with No Scope, Recent Failures, Ongoing with No Trigger.",
         "Device reports use devices from your Computers and Mobile Devices lists; you can also right-click a "
             + "device and choose Audit. Results are saved automatically: sort them by date, report, subject or "
-            + "count, and delete them individually or with Delete Older Than. Run Again repeats a report with the "
-            + "same options. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. Object "
-            + "types your account can't read are listed as warnings, meaning a result may be incomplete. Recent "
+            + "count, and delete them individually or with Delete Older Than. Re-run Report refreshes a result in place; Repeat "
+            + "Report runs it again with the same options as a new saved result. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. Object "
+            + "types your account can't read are listed as warnings, meaning a result may be incomplete; click Details on a warning to see what it covers. Recent "
             + "Failures reads every computer's policy history, so it takes longer than the others.",
         "The Activity log at the bottom can be resized by dragging the divider above it; right-click the log to "
             + "copy or clear it.",

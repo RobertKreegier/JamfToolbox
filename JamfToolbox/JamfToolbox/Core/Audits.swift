@@ -85,23 +85,29 @@ struct AuditFinding: Codable, Hashable, Identifiable {
     /// For a device's profiles: how the device is directly scoped, which
     /// decides the scope changes offered for the row.
     var directScope: DirectScope?
+    /// For a device's profiles: whether the profile is installed on the device.
+    var installed: Bool?
 
     // "relationship" is the key results saved by the first audit used.
     enum CodingKeys: String, CodingKey {
-        case objectType, objectName, objectID, detail = "relationship", webPage, directScope
+        case objectType, objectName, objectID, detail = "relationship", webPage, directScope, installed
     }
 
     init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
-         directScope: DirectScope? = nil) {
+         directScope: DirectScope? = nil, installed: Bool? = nil) {
         self.objectType = objectType
         self.objectName = objectName
         self.objectID = objectID
         self.detail = detail
         self.webPage = webPage ?? AuditObjects.webPage(forObjectType: objectType)
         self.directScope = directScope
+        self.installed = installed
     }
 
     var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" }
+
+    /// "Yes", "No", or "" when the report doesn't say.
+    var installedText: String { installed.map { $0 ? "Yes" : "No" } ?? "" }
 }
 
 /// A saved audit run.
@@ -123,11 +129,13 @@ struct AuditResult: Codable, Identifiable, Hashable {
     /// Object types that couldn't be read, and other caveats. Non-empty means
     /// the findings may be incomplete.
     var warnings: [String]
+    /// More about a warning (keyed by its text), e.g. which profiles weren't evaluated.
+    var warningDetails: [String: String]?
     var objectsScanned: Int
 
     init(reportID: String, report: String, runAt: Date, server: String, subject: AuditSubject?, subtitle: String,
          detailHeading: String, parameters: AuditParameters?, findings: [AuditFinding], warnings: [String],
-         objectsScanned: Int) {
+         warningDetails: [String: String]? = nil, objectsScanned: Int) {
         self.reportID = reportID
         self.report = report
         self.runAt = runAt
@@ -138,6 +146,7 @@ struct AuditResult: Codable, Identifiable, Hashable {
         self.parameters = parameters
         self.findings = findings
         self.warnings = warnings
+        self.warningDetails = warningDetails
         self.objectsScanned = objectsScanned
     }
 
@@ -156,6 +165,7 @@ struct AuditResult: Codable, Identifiable, Hashable {
         parameters = try? c.decodeIfPresent(AuditParameters.self, forKey: .parameters)
         findings = try c.decode([AuditFinding].self, forKey: .findings)
         warnings = (try? c.decode([String].self, forKey: .warnings)) ?? []
+        warningDetails = try? c.decodeIfPresent([String: String].self, forKey: .warningDetails)
         objectsScanned = (try? c.decode(Int.self, forKey: .objectsScanned)) ?? 0
     }
 
