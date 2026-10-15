@@ -100,9 +100,9 @@ private let helpSections: [HelpSection] = [
             + "Disabled but Still Scoped, Enabled with No Scope, Recent Failures, Ongoing with No Trigger.",
         "Device reports use devices from your Computers and Mobile Devices lists; you can also right-click a "
             + "device and choose Audit. Results are saved automatically: sort them by date, report, subject or "
-            + "count, and delete them individually or with Delete Older Than. Re-run Report refreshes a result in place; Repeat "
-            + "Report runs it again with the same options as a new saved result. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. Object "
-            + "types your account can't read are listed as warnings, meaning a result may be incomplete; click Details on a warning to see what it covers. Recent "
+            + "count, and delete them individually or with Delete Older Than. Refresh re-runs a result in place; Repeat "
+            + "runs it again with the same options as a new saved result. Double-click a finding to open it in Jamf Pro, or export the findings to CSV. Object "
+            + "types your account can't read are listed as warnings, meaning a result may be incomplete. Recent "
             + "Failures reads every computer's policy history, so it takes longer than the others.",
         "The Activity log at the bottom can be resized by dragging the divider above it; right-click the log to "
             + "copy or clear it.",

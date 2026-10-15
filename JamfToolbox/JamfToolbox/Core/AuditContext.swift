@@ -371,6 +371,25 @@ final class AuditContext {
         return root
     }
 
+    /// Which of the given Jamf user groups list `username` as a member.
+    /// Groups that can't be read are skipped, with a warning.
+    func userGroups(containing username: String, among ids: Set<String>) async throws -> Set<String> {
+        guard !username.isEmpty, !ids.isEmpty else { return [] }
+        let read = try await readAll(ids.sorted(), verb: "Reading user groups", name: { "user group \($0)" }) { id in
+            try await self.client.get("/JSSResource/usergroups/id/\(id)")
+        }
+        var member = Set<String>(), unreadable = 0
+        for (id, json) in read {
+            guard let json, let root = AuditObjects.rootObject(json) else { unreadable += 1; continue }
+            let users = root["users"]?.arrayValue ?? []
+            if users.contains(where: { ($0["username"] ?? $0["name"])?.text.lowercased() == username }) { member.insert(id) }
+        }
+        if unreadable > 0 {
+            warn("\(unreadable) user group(s) couldn't be read, so targets and exclusions through them weren't checked.")
+        }
+        return member
+    }
+
     /// Policy log entries for each computer (classic computer history).
     func policyLogs(_ computers: [DeviceRecord]) async throws -> [(DeviceRecord, [JSONValue])] {
         let read = try await readAll(computers, verb: "Reading policy history", name: { $0.name }) { device in

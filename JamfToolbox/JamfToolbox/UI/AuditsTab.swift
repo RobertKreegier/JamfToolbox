@@ -352,7 +352,9 @@ private struct AuditResultView: View {
             header
             summary
             ForEach(result.warnings, id: \.self) { warning in
-                WarningLine(warning: warning, details: result.warningDetails?[warning])
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
             }
             if !result.findings.isEmpty {
                 findingsTable
@@ -492,10 +494,10 @@ private struct AuditResultView: View {
 
     private var footer: some View {
         HStack {
-            Button("Re-run Report") { center.rerun(result, replacing: true) }
+            Button { center.rerun(result, replacing: true) } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 .disabled(center.isRunning || center.changingScope || AuditReports.report(result.reportID) == nil)
                 .help("Run this report again and replace this result with the fresh one")
-            Button("Repeat Report") { center.rerun(result) }
+            Button { center.rerun(result) } label: { Label("Repeat", systemImage: "plus") }
                 .disabled(center.isRunning || center.changingScope || AuditReports.report(result.reportID) == nil)
                 .help("Run this report again with the same options as a new saved result, keeping this one")
             Spacer()
@@ -528,38 +530,6 @@ private struct AuditResultView: View {
         let values = findings(ids).map { $0[keyPath: field] }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(values.joined(separator: "\n"), forType: .string)
-    }
-}
-
-/// A caveat on a result. When there's more to it (e.g. which profiles weren't
-/// evaluated), it shows on hover and from a Details button.
-private struct WarningLine: View {
-    let warning: String
-    let details: String?
-    @State private var showing = false
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Label(warning, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.callout)
-                .help(details ?? warning)
-            if let details {
-                Button("Details") { showing.toggle() }
-                    .buttonStyle(.link)
-                    .font(.callout)
-                    .popover(isPresented: $showing, arrowEdge: .bottom) {
-                        ScrollView {
-                            Text(details)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                        }
-                        .frame(width: 420)
-                        .frame(maxHeight: 320)
-                    }
-            }
-        }
     }
 }
 

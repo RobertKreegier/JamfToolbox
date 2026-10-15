@@ -129,13 +129,11 @@ struct AuditResult: Codable, Identifiable, Hashable {
     /// Object types that couldn't be read, and other caveats. Non-empty means
     /// the findings may be incomplete.
     var warnings: [String]
-    /// More about a warning (keyed by its text), e.g. which profiles weren't evaluated.
-    var warningDetails: [String: String]?
     var objectsScanned: Int
 
     init(reportID: String, report: String, runAt: Date, server: String, subject: AuditSubject?, subtitle: String,
          detailHeading: String, parameters: AuditParameters?, findings: [AuditFinding], warnings: [String],
-         warningDetails: [String: String]? = nil, objectsScanned: Int) {
+         objectsScanned: Int) {
         self.reportID = reportID
         self.report = report
         self.runAt = runAt
@@ -146,7 +144,6 @@ struct AuditResult: Codable, Identifiable, Hashable {
         self.parameters = parameters
         self.findings = findings
         self.warnings = warnings
-        self.warningDetails = warningDetails
         self.objectsScanned = objectsScanned
     }
 
@@ -165,7 +162,6 @@ struct AuditResult: Codable, Identifiable, Hashable {
         parameters = try? c.decodeIfPresent(AuditParameters.self, forKey: .parameters)
         findings = try c.decode([AuditFinding].self, forKey: .findings)
         warnings = (try? c.decode([String].self, forKey: .warnings)) ?? []
-        warningDetails = try? c.decodeIfPresent([String: String].self, forKey: .warningDetails)
         objectsScanned = (try? c.decode(Int.self, forKey: .objectsScanned)) ?? 0
     }
 
@@ -392,12 +388,12 @@ enum ScopeReading {
         var departments: [String: String] = [:]
         var excludedBuildings: [String: String] = [:]
         var excludedDepartments: [String: String] = [:]
+        /// Jamf user group targets and exclusions, id → name, and "All Users".
+        var userGroups: [String: String] = [:]
+        var excludedUserGroups: [String: String] = [:]
+        var allUsers = false
 
-        /// Target lists a device report can't check against one device's record
-        /// (user groups, and anything else besides users, buildings and departments).
-        var uncheckedTargets: [String] { otherTargets.filter { !["jss users", "buildings", "departments"].contains($0) } }
-
-        var isEmpty: Bool { !all && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
+        var isEmpty: Bool { !all && !allUsers && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
         /// True when any exclusion list is non-empty (devices, groups, users, buildings, departments, network segments…).
         var hasAnyExclusion = false
         var hasExclusions: Bool { hasAnyExclusion || !excludedDevices.isEmpty || !excludedGroups.isEmpty }
@@ -423,6 +419,8 @@ enum ScopeReading {
                 if entry.key == "jss_users" { result.users = userNames(entry.value) }
                 if entry.key == "buildings" { result.buildings = idNames(entry.value) }
                 if entry.key == "departments" { result.departments = idNames(entry.value) }
+                if entry.key == "jss_user_groups" { result.userGroups = idNames(entry.value) }
+                if entry.key == "all_jss_users" { result.allUsers = AuditObjects.isTrue(entry.value) }
                 if let items = entry.value.arrayValue, !items.isEmpty {
                     result.otherTargets.append(entry.key.replacingOccurrences(of: "_", with: " "))
                 }
@@ -439,6 +437,7 @@ enum ScopeReading {
             result.excludedUsers = userNames(exclusions["jss_users"] ?? .array([]))
             result.excludedBuildings = idNames(exclusions["buildings"] ?? .array([]))
             result.excludedDepartments = idNames(exclusions["departments"] ?? .array([]))
+            result.excludedUserGroups = idNames(exclusions["jss_user_groups"] ?? .array([]))
         }
         return result
     }
