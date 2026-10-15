@@ -91,9 +91,6 @@ enum AuditReports {
         AuditReport(id: "profiles-scope-gaps", category: .profiles, title: "Unscoped or Scoped to All",
                     summary: "Profiles with no scope (they install nowhere), and profiles scoped to every device with no exclusions.",
                     inputs: [], detailHeading: "Issue", run: profileScopeGaps),
-        AuditReport(id: "profiles-include-exclude", category: .profiles, title: "Included and Excluded",
-                    summary: "Profiles that both target and exclude the same group or device. The exclusion wins, so the target is misleading.",
-                    inputs: [], detailHeading: "Conflict", run: profileIncludeExclude),
         AuditReport(id: "profiles-devices-targeted-excluded", category: .profiles, title: "Devices Targeted and Excluded",
                     summary: "Every device that a profile both targets and excludes, by any route: for example targeted through one group and excluded through another, or targeted to all devices and excluded through the device's user, user group, building or department. The exclusion wins, so these devices don't get the profile.",
                     inputs: [.kind], detailHeading: "Targeted", run: devicesTargetedAndExcluded),
@@ -436,21 +433,6 @@ enum AuditReports {
                 findings.append(objectFinding(profile, "No scope: installs on nothing"))
             } else if scope.all && !scope.hasExclusions {
                 findings.append(objectFinding(profile, "Scoped to all \(kind.pluralLabel) with no exclusions"))
-            }
-        }
-        return AuditOutput(findings: sortFindings(findings), scanned: all.count, subtitle: "All configuration profiles")
-    }
-
-    static func profileIncludeExclude(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
-        let all = try await profiles(context, kinds: GroupKind.allCases)
-        var findings: [AuditFinding] = []
-        for (kind, profile) in all {
-            let scope = ScopeReading.scope(of: profile.root, kind: kind)
-            for (id, name) in scope.groups where scope.excludedGroups[id] != nil {
-                findings.append(objectFinding(profile, "Group “\(name.isEmpty ? id : name)” is both targeted and excluded"))
-            }
-            for id in scope.devices.intersection(scope.excludedDevices).sorted() {
-                findings.append(objectFinding(profile, "\(kind.label) ID \(id) is both targeted and excluded"))
             }
         }
         return AuditOutput(findings: sortFindings(findings), scanned: all.count, subtitle: "All configuration profiles")
