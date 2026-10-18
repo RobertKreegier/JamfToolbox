@@ -1,5 +1,4 @@
 import Foundation
-import JamfToolboxCore
 
 /// Type-ahead search over Jamf Pro for the main window's search field.
 /// Results appear in a dropdown; choosing one adds it to the working list.
@@ -7,32 +6,32 @@ import JamfToolboxCore
 /// Separate from `AppModel` so typing redraws only the search field and its
 /// dropdown, not the device table.
 @MainActor
-final class DeviceSearch: ObservableObject {
-    @Published var query = "" {
+public final class DeviceSearch: ObservableObject {
+    @Published public var query = "" {
         didSet { if query != oldValue { scheduleSearch() } }
     }
-    @Published private(set) var results: [DeviceEntry] = []
-    @Published var highlighted = 0
-    @Published private(set) var isSearching = false
-    @Published private(set) var message: String?
-    @Published private(set) var isOpen = false
+    @Published public private(set) var results: [DeviceEntry] = []
+    @Published public var highlighted = 0
+    @Published public private(set) var isSearching = false
+    @Published public private(set) var message: String?
+    @Published public private(set) var isOpen = false
     /// Bumped to ask the field to take keyboard focus.
-    @Published private(set) var focusToken = 0
+    @Published public private(set) var focusToken = 0
 
     weak var model: AppModel?
     /// The list this field searches and adds to.
-    let type: DeviceType
+    public let type: DeviceType
 
-    init(type: DeviceType) { self.type = type }
+    public init(type: DeviceType) { self.type = type }
 
     private static let minimumCharacters = 2
     private static let maximumResults = 12
     private var task: Task<Void, Never>?
 
-    func focus() { focusToken += 1 }
+    public func focus() { focusToken += 1 }
 
     /// Closes the dropdown and clears the field.
-    func reset() {
+    public func reset() {
         task?.cancel()
         query = ""
         results = []
@@ -42,13 +41,13 @@ final class DeviceSearch: ObservableObject {
     }
 
     /// Closes the dropdown but keeps what was typed.
-    func dismiss() { if isOpen { isOpen = false } }
+    public func dismiss() { if isOpen { isOpen = false } }
 
-    func isInList(_ entry: DeviceEntry) -> Bool {
+    public func isInList(_ entry: DeviceEntry) -> Bool {
         model?.entries(for: type).contains { $0.id == entry.id } ?? false
     }
 
-    func moveHighlight(_ delta: Int) {
+    public func moveHighlight(_ delta: Int) {
         guard !results.isEmpty else { return }
         highlighted = min(max(highlighted + delta, 0), results.count - 1)
     }
@@ -115,13 +114,13 @@ final class DeviceSearch: ObservableObject {
 
     // MARK: Choosing
 
-    func chooseHighlighted() {
+    public func chooseHighlighted() {
         guard results.indices.contains(highlighted) else { return }
         choose(results[highlighted])
     }
 
     /// Add the device to the list, or just select it if it's already there.
-    func choose(_ entry: DeviceEntry) {
+    public func choose(_ entry: DeviceEntry) {
         guard let model else { return }
         if !isInList(entry) { model.addEntries([entry], type: type) }
         model.selectAndReveal(entry.id, in: type)
@@ -131,7 +130,7 @@ final class DeviceSearch: ObservableObject {
 
     #if DEBUG
     /// Shows canned results without searching (previews only).
-    func showPreviewResults(_ entries: [DeviceEntry], query: String) {
+    public func showPreviewResults(_ entries: [DeviceEntry], query: String) {
         self.query = query
         task?.cancel()
         results = entries

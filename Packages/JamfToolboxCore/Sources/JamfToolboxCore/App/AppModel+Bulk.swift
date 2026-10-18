@@ -1,6 +1,4 @@
-import AppKit
-import SwiftUI
-import JamfToolboxCore
+import Foundation
 
 extension AppModel {
     typealias Gathered = (device: DeviceRef, record: JSONValue, tags: TagValues)
@@ -14,7 +12,7 @@ extension AppModel {
     /// for bulk actions that need per-device data to build a preview.
     private func bulkPrefetch(_ devices: [DeviceRef], client: JamfClient) async -> [Gathered]? {
         let progress = BulkProgress(total: devices.count)
-        let handle = Sheets.show { ProgressSheet(title: "Preparing…", progress: progress) }
+        let dismiss = ui.showProgress(title: "Preparing…", progress: progress)
         var gathered: [Gathered] = []
         var failures: [(DeviceRef, String)] = []
 
@@ -30,7 +28,7 @@ extension AppModel {
             }
         }
         let cancelled = progress.cancelled
-        handle.dismiss()
+        dismiss()
         await sheetSettle()
 
         if cancelled {
@@ -39,7 +37,7 @@ extension AppModel {
         }
         for (device, message) in failures { log.add("Skipped \(device.name): \(message)") }
         if gathered.isEmpty {
-            await Dialogs.error("None of the selected devices could be read. See the activity log for details.")
+            await ui.error("None of the selected devices could be read. See the activity log for details.")
             return nil
         }
         return gathered
@@ -49,7 +47,7 @@ extension AppModel {
     /// Every result is logged and a summary closes it out.
     private func bulkRun(_ title: String, devices: [DeviceRef], work: (DeviceRef) async throws -> String) async {
         let progress = BulkProgress(total: devices.count)
-        let handle = Sheets.show { ProgressSheet(title: title, progress: progress) }
+        let dismiss = ui.showProgress(title: title, progress: progress)
         var succeeded = 0, failed = 0, skipped = 0
 
         for (index, device) in devices.enumerated() {
@@ -67,7 +65,7 @@ extension AppModel {
                 log.add("FAILED — \(device.name): \(describe(error))")
             }
         }
-        handle.dismiss()
+        dismiss()
         await sheetSettle()
 
         var parts = ["\(succeeded) succeeded"]
@@ -77,13 +75,13 @@ extension AppModel {
         log.add("\(title): \(summary)")
         log.status = summary
         if failed > 0 {
-            await Dialogs.warning("\(title)\n\n\(summary)\n\nSee the activity log for the devices that failed.")
+            await ui.warning("\(title)\n\n\(summary)\n\nSee the activity log for the devices that failed.")
         }
     }
 
     // MARK: Actions
 
-    func bulkRename() async {
+    public func bulkRename() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
         guard !devices.isEmpty else { return }
@@ -107,18 +105,15 @@ extension AppModel {
             }
         }
         guard !planned.isEmpty else {
-            await Dialogs.info("Nothing to rename — every selected device already matches the template.")
+            await ui.info("Nothing to rename — every selected device already matches the template.")
             return
         }
-        let confirmed = await Sheets.present { done in
-            BulkConfirmSheet(
-                title: "Rename Devices",
+        let confirmed = await ui.confirmBulk(title: "Rename Devices",
                 intro: "\(planned.count) device(s) will be renamed using the template “\(template)”. "
                     + "Review the new names below.",
                 lines: capped(planned.map { "\($0.device.name)  →  \($0.newName)" }),
                 confirmLabel: "Rename \(planned.count) Device(s)",
-                done: done)
-        }
+                    warning: "")
         guard confirmed else {
             log.add("Bulk rename cancelled.")
             return
@@ -137,12 +132,12 @@ extension AppModel {
         }
     }
 
-    func bulkToggleLostMode() async {
+    public func bulkToggleLostMode() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
         guard let first = devices.first else { return }
         guard first.type == .mobile else {
-            await Dialogs.info("Lost Mode is only available for mobile devices.")
+            await ui.info("Lost Mode is only available for mobile devices.")
             return
         }
         guard let gathered = await bulkPrefetch(devices, client: client) else { return }
@@ -151,7 +146,7 @@ extension AppModel {
         let on = states.filter { $0 == true }.count
         let off = states.filter { $0 == false }.count
         let unknown = states.count - on - off
-        let choice = await Dialogs.choose(
+        let choice = await ui.choose(
             "\(gathered.count) mobile device(s) selected.\n"
             + "Currently on: \(on)   off: \(off)   not reported: \(unknown)\n\n"
             + "One direction is applied to every selected device, which keeps the result "
@@ -173,16 +168,12 @@ extension AppModel {
                 return
             }
             let lines = capped(targets.map { "\($0.0.name)  →  \(Templates.render(preset.message, $0.1))" })
-            let confirmed = await Sheets.present { done in
-                BulkConfirmSheet(
-                    title: "Enable Lost Mode",
+            let confirmed = await ui.confirmBulk(title: "Enable Lost Mode",
                     intro: "Lost Mode will be enabled on \(targets.count) device(s), locking each one and "
                         + "showing this message on its screen.",
                     lines: lines,
                     confirmLabel: "Enable on \(targets.count) Device(s)",
-                    warning: "Each device becomes unusable until Lost Mode is turned off.",
-                    done: done)
-            }
+                    warning: "Each device becomes unusable until Lost Mode is turned off.")
             guard confirmed else {
                 log.add("Bulk Enable Lost Mode cancelled.")
                 return
@@ -199,14 +190,11 @@ extension AppModel {
             }
         } else {
             let lines = capped(targets.map { $0.0.name })
-            let confirmed = await Sheets.present { done in
-                BulkConfirmSheet(
-                    title: "Disable Lost Mode",
+            let confirmed = await ui.confirmBulk(title: "Disable Lost Mode",
                     intro: "Lost Mode will be turned off on \(targets.count) device(s).",
                     lines: lines,
                     confirmLabel: "Disable on \(targets.count) Device(s)",
-                    done: done)
-            }
+                    warning: "")
             guard confirmed else {
                 log.add("Bulk Disable Lost Mode cancelled.")
                 return
@@ -221,10 +209,8 @@ extension AppModel {
     /// Returns the chosen index, or nil when cancelled.
     private func choosePreset(title: String, intro: String, options: [(String, String)]) async -> Int? {
         guard options.count > 1 else { return 0 }
-        return await Sheets.present { done in
-            PresetChoiceSheet(title: title, intro: intro, options: options.map { (name: $0.0, text: $0.1) },
-                              confirmLabel: "Continue", done: done)
-        }
+        return await ui.choosePreset(title: title, intro: intro, options: options.map { (name: $0.0, text: $0.1) },
+                                     confirmLabel: "Continue")
     }
 
     /// Tag values per device, read only when the message actually uses tags.
@@ -237,7 +223,7 @@ extension AppModel {
         return gathered.map { ($0.device, $0.tags) }
     }
 
-    func bulkLock() async {
+    public func bulkLock() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
         guard let type = devices.first?.type else { return }
@@ -257,7 +243,7 @@ extension AppModel {
             let pin = result["6-digit PIN"] ?? ""
             let template = result["Lock message"] ?? ""
             guard pin.count == 6, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
-                await Dialogs.error("The PIN must be exactly 6 digits.")
+                await ui.error("The PIN must be exactly 6 digits.")
                 return
             }
             guard let targets = await tagsIfNeeded(template, devices: devices, client: client) else {
@@ -265,15 +251,11 @@ extension AppModel {
                 return
             }
             let lines = capped(targets.map { "\($0.device.name)  →  \(Templates.render(template, $0.tags))" })
-            let confirmed = await Sheets.present { done in
-                BulkConfirmSheet(
-                    title: "Lock Computers",
+            let confirmed = await ui.confirmBulk(title: "Lock Computers",
                     intro: "\(targets.count) Mac(s) will be locked immediately and will require the PIN \(pin) to unlock.",
                     lines: lines,
                     confirmLabel: "Lock \(targets.count) Mac(s)",
-                    warning: "Write this PIN down now — the same PIN unlocks every device in this batch.",
-                    done: done)
-            }
+                    warning: "Write this PIN down now — the same PIN unlocks every device in this batch.")
             guard confirmed else {
                 log.add("Bulk lock cancelled.")
                 return
@@ -297,15 +279,12 @@ extension AppModel {
                 let message = Templates.render(preset.message, target.tags)
                 return message.isEmpty ? target.device.name : "\(target.device.name)  →  \(message)"
             })
-            let confirmed = await Sheets.present { done in
-                BulkConfirmSheet(
-                    title: "Lock Devices",
+            let confirmed = await ui.confirmBulk(title: "Lock Devices",
                     intro: "\(targets.count) mobile device(s) will be locked immediately. "
                         + "Each one locks with its existing passcode and shows the message on its lock screen.",
                     lines: lines,
                     confirmLabel: "Lock \(targets.count) Device(s)",
-                    done: done)
-            }
+                    warning: "")
             guard confirmed else {
                 log.add("Bulk lock cancelled.")
                 return
@@ -318,16 +297,16 @@ extension AppModel {
         }
     }
 
-    func bulkOpenInJamf() async {
+    public func bulkOpenInJamf() async {
         guard let client = await requireClient() else { return }
         let devices = await selectedDevices()
         guard !devices.isEmpty else { return }
         if devices.count > 10,
-           !(await Dialogs.confirm("This will open \(devices.count) browser tabs. Continue?", yes: "Open", no: "Cancel")) {
+           !(await ui.confirm("This will open \(devices.count) browser tabs. Continue?", yes: "Open", no: "Cancel")) {
             return
         }
         for device in devices {
-            if let url = client.deviceWebURL(type: device.type, id: device.id) { NSWorkspace.shared.open(url) }
+            if let url = client.deviceWebURL(type: device.type, id: device.id) { ui.openURL(url) }
         }
         log.add("Opened \(devices.count) device(s) in Jamf Pro.")
     }

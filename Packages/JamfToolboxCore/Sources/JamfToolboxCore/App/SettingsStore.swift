@@ -1,26 +1,25 @@
 import Foundation
-import JamfToolboxCore
 
 /// Owns `settings.json` and the Keychain-backed secrets.
 @MainActor
-final class SettingsStore: ObservableObject {
-    @Published var prefs: Preferences
+public final class SettingsStore: ObservableObject {
+    @Published public var prefs: Preferences
 
     /// False once a Keychain write has failed; secrets then fall back to the
     /// settings file (base64, owner-only permissions) so the app keeps working.
-    private(set) var keychainAvailable = true
-    private(set) var lastSaveError: String?
+    public private(set) var keychainAvailable = true
+    public private(set) var lastSaveError: String?
 
     /// Folder holding settings.json (and the Audits folder).
-    let directory: URL
+    public let directory: URL
     /// When set, secrets live only in this dictionary and the Keychain is never
     /// touched. Used by previews so they can't read real credentials.
     private var memorySecrets: [String: String]?
     private var fileURL: URL { directory.appendingPathComponent("settings.json") }
 
-    static let secretAccounts = ["client_id", "client_secret", "username", "password", "meraki_api_key"]
+    public static let secretAccounts = ["client_id", "client_secret", "username", "password", "meraki_api_key"]
 
-    init(directory: URL? = nil, inMemorySecrets: [String: String]? = nil) {
+    public init(directory: URL? = nil, inMemorySecrets: [String: String]? = nil) {
         memorySecrets = inMemorySecrets
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         var directory = directory
@@ -54,7 +53,7 @@ final class SettingsStore: ObservableObject {
     // MARK: Persistence
 
     @discardableResult
-    func save() -> Bool {
+    public func save() -> Bool {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try prefs.encoded().write(to: fileURL, options: .atomic)
@@ -69,7 +68,7 @@ final class SettingsStore: ObservableObject {
 
     // MARK: Secrets
 
-    func secret(_ account: String) -> String {
+    public func secret(_ account: String) -> String {
         if let memorySecrets { return memorySecrets[account] ?? "" }
         for service in [Keychain.service, Keychain.legacyService] {
             if let value = Keychain.read(service: service, account: account) {
@@ -86,7 +85,7 @@ final class SettingsStore: ObservableObject {
 
     /// Returns true when the value went to the Keychain.
     @discardableResult
-    func setSecret(_ account: String, _ value: String) -> Bool {
+    public func setSecret(_ account: String, _ value: String) -> Bool {
         if memorySecrets != nil {
             memorySecrets?[account] = value.isEmpty ? nil : value
             return true
@@ -107,7 +106,7 @@ final class SettingsStore: ObservableObject {
         return false
     }
 
-    func credentials(for method: AuthMethod) -> (String, String) {
+    public func credentials(for method: AuthMethod) -> (String, String) {
         switch method {
         case .oauth: return (secret("client_id"), secret("client_secret"))
         case .basic: return (secret("username"), secret("password"))

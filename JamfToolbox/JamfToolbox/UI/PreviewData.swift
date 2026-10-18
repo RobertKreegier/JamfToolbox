@@ -15,7 +15,7 @@ enum PreviewData {
         let store = SettingsStore(directory: folder, inMemorySecrets: ["username": "preview-user"])
         store.prefs.deviceListComputer = computers
         store.prefs.deviceListMobile = mobiles
-        let model = AppModel(settings: store)
+        let model = AppModel.makeMac(settings: store)
         model.opensSettingsWhenUnconfigured = false
         model.deviceType = type
         model.selection = selected
