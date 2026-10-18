@@ -161,8 +161,17 @@ public final class AppModel: ObservableObject {
         let prefs = settings.prefs
         guard !prefs.jamfURL.isEmpty else { client = nil; return }
         let (a, b) = settings.credentials(for: prefs.authMethod)
-        client = JamfClient(baseURL: prefs.jamfURL, authMethod: prefs.authMethod,
-                            credentialA: a, credentialB: b, tls: tlsPolicy)
+        let client = JamfClient(baseURL: prefs.jamfURL, authMethod: prefs.authMethod,
+                                credentialA: a, credentialB: b, tls: tlsPolicy)
+        self.client = client
+        warmUp()
+    }
+
+    /// Signs in to Jamf Pro in the background (if the token is missing or
+    /// expired), so the next request starts right away.
+    public func warmUp() {
+        guard let client else { return }
+        Task { await client.warmUp() }
     }
 
     public func settingsSaved() {

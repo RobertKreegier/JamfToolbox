@@ -7,6 +7,7 @@
 #   Jamf Pro URL: https://127.0.0.1:18450 (any username and password; turn
 #   Verify SSL off). Debug builds read JAMFTOOLBOX_MERAKI_BASE for Meraki:
 #   https://127.0.0.1:18450/meraki (any API key).
+#   MOCK_TOKEN_DELAY=3 makes sign-in take 3 seconds, like a slow server.
 import http.server, json, os, re, ssl, sys, time, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mock_scope_xml as sx
@@ -76,6 +77,7 @@ class H(sx.H):
         p = self.path
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode()
         if p.endswith("/token"):
+            time.sleep(float(os.environ.get("MOCK_TOKEN_DELAY", "0")))
             return self.json(200, {"token": "t", "expires": "2099-01-01T00:00:00.000Z"})
         if p == "/JSSResource/mobiledevicecommands/command":
             command = re.search(r"<command>(\w+)</command>", body)[1]
