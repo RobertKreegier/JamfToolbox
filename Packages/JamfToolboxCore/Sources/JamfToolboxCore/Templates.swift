@@ -1,10 +1,10 @@
 import Foundation
 
-typealias TagValues = [String: String]
+public typealias TagValues = [String: String]
 
-enum Templates {
+public enum Templates {
     /// Tags offered in Settings and Help, in display order.
-    static let tagDescriptions: [(tag: String, description: String)] = [
+    public static let tagDescriptions: [(tag: String, description: String)] = [
         ("{name}", "Current device name in Jamf Pro"),
         ("{username}", "Assigned username (Location > Username)"),
         ("{realname}", "Assigned user's full name"),
@@ -32,7 +32,7 @@ enum Templates {
     private static let tagPattern = try! NSRegularExpression(pattern: "\\{([a-z_0-9]+)\\}")
 
     /// Substitute `{tags}`; unknown tags are left as-is so typos stay visible.
-    static func render(_ template: String, _ values: TagValues) -> String {
+    public static func render(_ template: String, _ values: TagValues) -> String {
         let ns = template as NSString
         var result = ""
         var cursor = 0
@@ -47,7 +47,7 @@ enum Templates {
     }
 
     /// Flatten a classic-API device record into tag values.
-    static func buildTagValues(record: JSONValue, type: DeviceType, deviceID: String,
+    public static func buildTagValues(record: JSONValue, type: DeviceType, deviceID: String,
                                now: Date = Date()) -> TagValues {
         let general = record["general"] ?? .emptyObject
         let location = record["location"] ?? .emptyObject
@@ -114,7 +114,7 @@ enum Templates {
     }
 
     /// A working-list entry carrying every catalog field, from a full record.
-    static func entry(from record: JSONValue, type: DeviceType, deviceID: String) -> DeviceEntry {
+    public static func entry(from record: JSONValue, type: DeviceType, deviceID: String) -> DeviceEntry {
         let tags = buildTagValues(record: record, type: type, deviceID: deviceID)
         var entry = DeviceEntry(id: deviceID)
         for field in ColumnField.allCases {
@@ -127,7 +127,7 @@ enum Templates {
     ///
     /// Jamf reports this in slightly different places and spellings depending on
     /// version, so several keys are checked.
-    static func lostModeEnabled(in record: JSONValue) -> Bool? {
+    public static func lostModeEnabled(in record: JSONValue) -> Bool? {
         let sections = [record["general"], record["security"], record["mobile_device_lost_mode"]]
         let keys = ["lost_mode_enabled", "lost_mode_enable", "lost_mode_enforced",
                     "lost_mode_status", "lost_mode"]
@@ -153,7 +153,7 @@ enum Templates {
 }
 
 /// Meraki hands back MACs in whatever format Jamf stored; its API wants `aa:bb:cc:dd:ee:ff`.
-func normalizeMAC(_ mac: String) -> String {
+public func normalizeMAC(_ mac: String) -> String {
     let hex = mac.filter { $0.isHexDigit }
     guard hex.count == 12 else { return mac.trimmingCharacters(in: .whitespaces).lowercased() }
     var parts: [String] = []
@@ -167,7 +167,7 @@ func normalizeMAC(_ mac: String) -> String {
 }
 
 /// Meraki timestamps arrive as ISO 8601 or epoch seconds; show them in local time.
-func friendlyTimestamp(_ value: JSONValue?) -> String {
+public func friendlyTimestamp(_ value: JSONValue?) -> String {
     guard let value else { return "" }
     let date: Date?
     switch value {
@@ -187,7 +187,7 @@ func friendlyTimestamp(_ value: JSONValue?) -> String {
     return formatter.string(from: date)
 }
 
-func parseISO8601(_ text: String) -> Date? {
+public func parseISO8601(_ text: String) -> Date? {
     let fractional = ISO8601DateFormatter()
     fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     if let date = fractional.date(from: text) { return date }

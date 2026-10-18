@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import JamfToolboxCore
 
 /// Sample data for SwiftUI previews.
 ///

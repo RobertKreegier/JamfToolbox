@@ -1,0 +1,465 @@
+[
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>false<\/all_mobile_devices><all_jss_users>false<\/all_jss_users><mobile_devices><mobile_device><id>101<\/id><name>iPad-101<\/name><udid>U-101<\/udid><wifi_mac_address><\/wifi_mac_address><\/mobile_device><mobile_device><id>102<\/id><name>iPad-102<\/name><udid>U-102<\/udid><wifi_mac_address><\/wifi_mac_address><\/mobile_device><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>7<\/id><name>G7 &amp; Friends<\/name><\/mobile_device_group><\/mobile_device_groups><jss_users><user><id>5<\/id><name>JDoe<\/name><\/user><user><id>6<\/id><name>other<\/name><\/user><\/jss_users><jss_user_groups><\/jss_user_groups><limitations><users><user><name>ldap&lt;bob&gt;<\/name><\/user><\/users><user_groups><\/user_groups><network_segments><network_segment><id>3<\/id><name>Lab<\/name><\/network_segment><\/network_segments><ibeacons><\/ibeacons><\/limitations><exclusions><mobile_devices><mobile_device><id>101<\/id><\/mobile_device><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>9<\/id><name>G9<\/name><\/mobile_device_group><\/mobile_device_groups><users><\/users><user_groups><\/user_groups><network_segments><\/network_segments><ibeacons><\/ibeacons><jss_users><user><id>5<\/id><name>jdoe<\/name><\/user><\/jss_users><jss_user_groups><\/jss_user_groups><\/exclusions><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/jss_users" : [
+        "id:5"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ],
+      "scope\/jss_users" : [
+        "id:5",
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101",
+        "id:102"
+      ]
+    },
+    "case" : "full\/exclude",
+    "changes" : [
+      "added the device to Exclusions"
+    ],
+    "expected" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/jss_users" : [
+        "id:5"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ],
+      "scope\/jss_users" : [
+        "id:5",
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101",
+        "id:102"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>false<\/all_mobile_devices><all_jss_users>false<\/all_jss_users><mobile_devices><mobile_device><id>102<\/id><name>iPad-102<\/name><udid>U-102<\/udid><wifi_mac_address><\/wifi_mac_address><\/mobile_device><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>7<\/id><name>G7 &amp; Friends<\/name><\/mobile_device_group><\/mobile_device_groups><jss_users><user><id>6<\/id><name>other<\/name><\/user><\/jss_users><jss_user_groups><\/jss_user_groups><limitations><users><user><name>ldap&lt;bob&gt;<\/name><\/user><\/users><user_groups><\/user_groups><network_segments><network_segment><id>3<\/id><name>Lab<\/name><\/network_segment><\/network_segments><ibeacons><\/ibeacons><\/limitations><exclusions><mobile_devices><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>9<\/id><name>G9<\/name><\/mobile_device_group><\/mobile_device_groups><users><\/users><user_groups><\/user_groups><network_segments><\/network_segments><ibeacons><\/ibeacons><jss_users><user><id>5<\/id><name>jdoe<\/name><\/user><\/jss_users><jss_user_groups><\/jss_user_groups><\/exclusions><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/jss_users" : [
+        "id:5"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/jss_users" : [
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:102"
+      ]
+    },
+    "case" : "full\/removeTarget",
+    "changes" : [
+      "removed the device from Targets",
+      "removed user “jdoe” from Targets"
+    ],
+    "expected" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/jss_users" : [
+        "id:5"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/jss_users" : [
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:102"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>false<\/all_mobile_devices><all_jss_users>false<\/all_jss_users><mobile_devices><mobile_device><id>101<\/id><name>iPad-101<\/name><udid>U-101<\/udid><wifi_mac_address><\/wifi_mac_address><\/mobile_device><mobile_device><id>102<\/id><name>iPad-102<\/name><udid>U-102<\/udid><wifi_mac_address><\/wifi_mac_address><\/mobile_device><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>7<\/id><name>G7 &amp; Friends<\/name><\/mobile_device_group><\/mobile_device_groups><jss_users><user><id>5<\/id><name>JDoe<\/name><\/user><user><id>6<\/id><name>other<\/name><\/user><\/jss_users><jss_user_groups><\/jss_user_groups><limitations><users><user><name>ldap&lt;bob&gt;<\/name><\/user><\/users><user_groups><\/user_groups><network_segments><network_segment><id>3<\/id><name>Lab<\/name><\/network_segment><\/network_segments><ibeacons><\/ibeacons><\/limitations><exclusions><mobile_devices><\/mobile_devices><buildings><\/buildings><departments><\/departments><mobile_device_groups><mobile_device_group><id>9<\/id><name>G9<\/name><\/mobile_device_group><\/mobile_device_groups><users><\/users><user_groups><\/user_groups><network_segments><\/network_segments><ibeacons><\/ibeacons><jss_users><\/jss_users><jss_user_groups><\/jss_user_groups><\/exclusions><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/jss_users" : [
+        "id:5",
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101",
+        "id:102"
+      ]
+    },
+    "case" : "full\/removeExclusion",
+    "changes" : [
+      "removed user “jdoe” from Exclusions"
+    ],
+    "expected" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/jss_users" : [
+        "id:5",
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101",
+        "id:102"
+      ]
+    }
+  },
+  {
+    "case" : "full\/fingerprint",
+    "fp" : {
+      "scope\/all_jss_users" : [
+        "false"
+      ],
+      "scope\/all_mobile_devices" : [
+        "false"
+      ],
+      "scope\/exclusions\/jss_users" : [
+        "id:5"
+      ],
+      "scope\/exclusions\/mobile_device_groups" : [
+        "id:9"
+      ],
+      "scope\/jss_users" : [
+        "id:5",
+        "id:6"
+      ],
+      "scope\/limitations\/network_segments" : [
+        "id:3"
+      ],
+      "scope\/limitations\/users" : [
+        "name:ldap<bob>"
+      ],
+      "scope\/mobile_device_groups" : [
+        "id:7"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101",
+        "id:102"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><os_x_configuration_profile><scope><all_computers>false<\/all_computers><computers><size>2<\/size><computer><id>1<\/id><name>MBP-1<\/name><\/computer><computer><id>2<\/id><name>MBP-2<\/name><\/computer><\/computers><computer_groups><size>0<\/size><\/computer_groups><exclusions><computers><size>1<\/size><computer><id>1<\/id><\/computer><\/computers><\/exclusions><\/scope><\/os_x_configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:1",
+        "id:2"
+      ],
+      "scope\/exclusions\/computers" : [
+        "id:1"
+      ]
+    },
+    "case" : "sized\/exclude",
+    "changes" : [
+      "added the device to Exclusions"
+    ],
+    "expected" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:1",
+        "id:2"
+      ],
+      "scope\/exclusions\/computers" : [
+        "id:1"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><os_x_configuration_profile><scope><all_computers>false<\/all_computers><computers><size>1<\/size><computer><id>2<\/id><name>MBP-2<\/name><\/computer><\/computers><computer_groups><size>0<\/size><\/computer_groups><exclusions><computers><size>0<\/size><\/computers><\/exclusions><\/scope><\/os_x_configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:2"
+      ]
+    },
+    "case" : "sized\/removeTarget",
+    "changes" : [
+      "removed the device from Targets"
+    ],
+    "expected" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:2"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><os_x_configuration_profile><scope><all_computers>false<\/all_computers><computers><size>2<\/size><computer><id>1<\/id><name>MBP-1<\/name><\/computer><computer><id>2<\/id><name>MBP-2<\/name><\/computer><\/computers><computer_groups><size>0<\/size><\/computer_groups><exclusions><computers><size>0<\/size><\/computers><\/exclusions><\/scope><\/os_x_configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:1",
+        "id:2"
+      ]
+    },
+    "case" : "sized\/removeExclusion",
+    "changes" : [
+
+    ],
+    "expected" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:1",
+        "id:2"
+      ]
+    }
+  },
+  {
+    "case" : "sized\/fingerprint",
+    "fp" : {
+      "scope\/all_computers" : [
+        "false"
+      ],
+      "scope\/computers" : [
+        "id:1",
+        "id:2"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>true<\/all_mobile_devices><exclusions><mobile_devices><mobile_device><id>101<\/id><\/mobile_device><\/mobile_devices><\/exclusions><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ],
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ]
+    },
+    "case" : "bare\/exclude",
+    "changes" : [
+      "added the device to Exclusions"
+    ],
+    "expected" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ],
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>true<\/all_mobile_devices><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ]
+    },
+    "case" : "bare\/removeTarget",
+    "changes" : [
+
+    ],
+    "expected" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><all_mobile_devices>true<\/all_mobile_devices><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ]
+    },
+    "case" : "bare\/removeExclusion",
+    "changes" : [
+
+    ],
+    "expected" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ]
+    }
+  },
+  {
+    "case" : "bare\/fingerprint",
+    "fp" : {
+      "scope\/all_mobile_devices" : [
+        "true"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><mobile_devices><mobile_device><id> 101 <\/id><\/mobile_device><\/mobile_devices><exclusions><mobile_devices><mobile_device><id>101<\/id><\/mobile_device><\/mobile_devices><\/exclusions><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101"
+      ]
+    },
+    "case" : "whitespace\/exclude",
+    "changes" : [
+      "added the device to Exclusions"
+    ],
+    "expected" : {
+      "scope\/exclusions\/mobile_devices" : [
+        "id:101"
+      ],
+      "scope\/mobile_devices" : [
+        "id:101"
+      ]
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><mobile_devices><\/mobile_devices><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+
+    },
+    "case" : "whitespace\/removeTarget",
+    "changes" : [
+      "removed the device from Targets"
+    ],
+    "expected" : {
+
+    }
+  },
+  {
+    "body" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?><configuration_profile><scope><mobile_devices><mobile_device><id> 101 <\/id><\/mobile_device><\/mobile_devices><\/scope><\/configuration_profile>",
+    "bodyFingerprint" : {
+      "scope\/mobile_devices" : [
+        "id:101"
+      ]
+    },
+    "case" : "whitespace\/removeExclusion",
+    "changes" : [
+
+    ],
+    "expected" : {
+      "scope\/mobile_devices" : [
+        "id:101"
+      ]
+    }
+  },
+  {
+    "case" : "whitespace\/fingerprint",
+    "fp" : {
+      "scope\/mobile_devices" : [
+        "id:101"
+      ]
+    }
+  },
+  {
+    "case" : "noscope",
+    "error" : "ServiceError(message: \"Jamf Pro returned a profile without a scope, so nothing was changed.\", isNotFound: false, isPermissionDenied: false)"
+  },
+  {
+    "case" : "badxml",
+    "fp" : "nil"
+  }
+]

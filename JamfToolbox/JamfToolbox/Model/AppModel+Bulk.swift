@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 extension AppModel {
     typealias Gathered = (device: DeviceRef, record: JSONValue, tags: TagValues)

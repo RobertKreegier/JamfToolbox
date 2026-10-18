@@ -1,4 +1,5 @@
 import SwiftUI
+import JamfToolboxCore
 
 struct MainView: View {
     @ObservedObject var model: AppModel

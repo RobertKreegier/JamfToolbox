@@ -1,18 +1,18 @@
 import Foundation
 
 /// CSV and Excel (.xlsx) rendering of a device list. No third-party libraries.
-enum ListExport {
+public enum ListExport {
     /// CSV with a header row, using the same quoting rules and `\r\n` line
     /// endings as Python's `csv.writer`, so pasted output is unchanged.
     /// One CSV line (no line ending), quoted like Python's `csv.writer`.
-    static func csvLine(_ fields: [String]) -> String {
+    public static func csvLine(_ fields: [String]) -> String {
         fields.map { text in
             guard text.unicodeScalars.contains(where: { $0 == "," || $0 == "\"" || $0 == "\r" || $0 == "\n" }) else { return text }
             return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }.joined(separator: ",")
     }
 
-    static func csv(entries: [DeviceEntry], columns: [ColumnField]) -> String {
+    public static func csv(entries: [DeviceEntry], columns: [ColumnField]) -> String {
         func field(_ text: String) -> String {
             // Scan scalars, not Characters: "\r\n" is one Character and would slip past a "\n" check.
             guard text.unicodeScalars.contains(where: { $0 == "," || $0 == "\"" || $0 == "\r" || $0 == "\n" }) else { return text }
@@ -26,13 +26,13 @@ enum ListExport {
     }
 
     /// UTF-8 with a byte-order mark, so Excel reads accented names correctly.
-    static func csvFileData(entries: [DeviceEntry], columns: [ColumnField]) -> Data {
+    public static func csvFileData(entries: [DeviceEntry], columns: [ColumnField]) -> Data {
         Data([0xEF, 0xBB, 0xBF]) + Data(csv(entries: entries, columns: columns).utf8)
     }
 
     // MARK: XLSX
 
-    static func xlsxData(entries: [DeviceEntry], columns: [ColumnField]) -> Data {
+    public static func xlsxData(entries: [DeviceEntry], columns: [ColumnField]) -> Data {
         var rows: [[String]] = [columns.map(\.heading)]
         rows += entries.map { entry in columns.map { entry.value($0) } }
 
@@ -88,8 +88,8 @@ enum ListExport {
 /// Writes an uncompressed ("stored") ZIP archive. Foundation has no public ZIP
 /// API, and a spreadsheet of device names is small enough that compression
 /// buys nothing.
-enum ZipWriter {
-    static func archive(_ files: [(name: String, data: Data)]) -> Data {
+public enum ZipWriter {
+    public static func archive(_ files: [(name: String, data: Data)]) -> Data {
         var output = Data()
         var central = Data()
         // Fixed DOS timestamp (1980-01-01 00:00) keeps the output reproducible.
@@ -159,7 +159,7 @@ enum ZipWriter {
         return c
     }
 
-    static func crc32(_ data: Data) -> UInt32 {
+    public static func crc32(_ data: Data) -> UInt32 {
         var c: UInt32 = 0xFFFFFFFF
         for byte in data { c = crcTable[Int((c ^ UInt32(byte)) & 0xFF)] ^ (c >> 8) }
         return c ^ 0xFFFFFFFF

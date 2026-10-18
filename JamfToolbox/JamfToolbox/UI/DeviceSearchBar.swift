@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// The search field. Typing searches Jamf Pro; Return adds the highlighted
 /// result, ↑/↓ move the highlight, Esc closes the dropdown.

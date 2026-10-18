@@ -6,6 +6,10 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		000000000000000000000150 /* JamfToolboxCore in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000160 /* JamfToolboxCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* JamfToolbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JamfToolbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -22,6 +26,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				000000000000000000000150 /* JamfToolboxCore in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -60,6 +65,9 @@
 				000000000000000000000010 /* JamfToolbox */,
 			);
 			name = JamfToolbox;
+			packageProductDependencies = (
+				000000000000000000000160 /* JamfToolboxCore */,
+			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* JamfToolbox.app */;
 			productType = "com.apple.product-type.application";
@@ -88,6 +96,9 @@
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				000000000000000000000170 /* XCLocalSwiftPackageReference "../Packages/JamfToolboxCore" */,
+			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
@@ -319,6 +330,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		000000000000000000000170 /* XCLocalSwiftPackageReference "../Packages/JamfToolboxCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/JamfToolboxCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		000000000000000000000160 /* JamfToolboxCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000170 /* XCLocalSwiftPackageReference "../Packages/JamfToolboxCore" */;
+			productName = JamfToolboxCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000000 /* Project object */;
 }

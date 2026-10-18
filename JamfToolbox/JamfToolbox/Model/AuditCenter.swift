@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// State for the Jamf Audits tab: the chosen report and its inputs, the
 /// running audit, and saved results.

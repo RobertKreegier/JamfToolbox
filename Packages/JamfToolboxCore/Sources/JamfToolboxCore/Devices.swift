@@ -1,12 +1,12 @@
 import Foundation
 
-enum DeviceType: String, CaseIterable, Identifiable {
+public enum DeviceType: String, CaseIterable, Identifiable {
     case computer
     case mobile
 
-    var id: String { rawValue }
-    var pluralName: String { self == .computer ? "computers" : "mobile devices" }
-    var exportName: String { self == .computer ? "Computers" : "Mobile Devices" }
+    public var id: String { rawValue }
+    public var pluralName: String { self == .computer ? "computers" : "mobile devices" }
+    public var exportName: String { self == .computer ? "Computers" : "Mobile Devices" }
 }
 
 /// Every field a device row can display, in catalog order. Raw values match
@@ -14,7 +14,7 @@ enum DeviceType: String, CaseIterable, Identifiable {
 ///
 /// Saved list entries carry *all* of these fields, so changing which columns
 /// are shown never requires a refetch.
-enum ColumnField: String, CaseIterable, Identifiable {
+public enum ColumnField: String, CaseIterable, Identifiable {
     case name
     case serial
     case username
@@ -36,9 +36,9 @@ enum ColumnField: String, CaseIterable, Identifiable {
     case lastInventory = "last_inventory"
     case deviceID = "device_id"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var heading: String {
+    public var heading: String {
         switch self {
         case .name: return "Name"
         case .serial: return "Serial"
@@ -63,7 +63,7 @@ enum ColumnField: String, CaseIterable, Identifiable {
         }
     }
 
-    var defaultWidth: CGFloat {
+    public var defaultWidth: CGFloat {
         switch self {
         case .name: return 170
         case .serial: return 115
@@ -89,30 +89,30 @@ enum ColumnField: String, CaseIterable, Identifiable {
     }
 
     /// The out-of-the-box column set (also what "Reset to Default Columns" restores).
-    static let defaults: [ColumnField] = [.name, .serial, .username, .wifiMAC, .ip, .model]
+    public static let defaults: [ColumnField] = [.name, .serial, .username, .wifiMAC, .ip, .model]
 }
 
 /// One row of a saved working list.
 ///
 /// Stored as a flat JSON object (`{"id": "12", "name": "…", "serial": "…"}`)
 /// exactly like the Python app wrote it, so existing settings files load as-is.
-struct DeviceEntry: Codable, Equatable, Identifiable {
-    var id: String
-    var fields: [String: String]
+public struct DeviceEntry: Codable, Equatable, Identifiable {
+    public var id: String
+    public var fields: [String: String]
 
-    init(id: String, fields: [String: String] = [:]) {
+    public init(id: String, fields: [String: String] = [:]) {
         self.id = id
         self.fields = fields
     }
 
-    func value(_ field: ColumnField) -> String { fields[field.rawValue] ?? "" }
+    public func value(_ field: ColumnField) -> String { fields[field.rawValue] ?? "" }
 
-    mutating func setValue(_ value: String, for field: ColumnField) {
+    public mutating func setValue(_ value: String, for field: ColumnField) {
         fields[field.rawValue] = value
     }
 
     /// Display name for logs and prompts: name, else serial, else the Jamf ID.
-    var displayName: String {
+    public var displayName: String {
         let name = value(.name)
         if !name.isEmpty { return name }
         let serial = value(.serial)
@@ -126,7 +126,7 @@ struct DeviceEntry: Codable, Equatable, Identifiable {
         init?(intValue: Int) { nil }
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: Key.self)
         var id = ""
         var fields: [String: String] = [:]
@@ -155,7 +155,7 @@ struct DeviceEntry: Codable, Equatable, Identifiable {
         self.fields = fields
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: Key.self)
         try container.encode(id, forKey: Key(stringValue: "id"))
         for field in ColumnField.allCases {
@@ -166,7 +166,7 @@ struct DeviceEntry: Codable, Equatable, Identifiable {
 
 /// The actions a device can take. Raw values are the Python method names, which
 /// is what the shared settings file stores for the double-click action.
-enum DeviceAction: String, CaseIterable, Identifiable {
+public enum DeviceAction: String, CaseIterable, Identifiable {
     case showInfo = "action_show_info"
     case networkInfo = "action_meraki_info"
     case toggleLostMode = "action_toggle_lost_mode"
@@ -175,9 +175,9 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     case updateInventory = "action_update_inventory"
     case openInJamf = "action_open_in_jamf"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .showInfo: return "Show Info"
         case .networkInfo: return "Network Info"
@@ -191,9 +191,9 @@ enum DeviceAction: String, CaseIterable, Identifiable {
 
     /// Jamf has no remote command for these on a Mac, so they are shown
     /// disabled (not removed) for computers to keep the menu layout stable.
-    var mobileOnly: Bool { self == .toggleLostMode || self == .updateInventory }
+    public var mobileOnly: Bool { self == .toggleLostMode || self == .updateInventory }
 
-    var supportsBulk: Bool {
+    public var supportsBulk: Bool {
         switch self {
         case .toggleLostMode, .lock, .rename, .openInJamf: return true
         default: return false
@@ -201,9 +201,9 @@ enum DeviceAction: String, CaseIterable, Identifiable {
     }
 
     /// Actions that open a prompt first get an ellipsis in menus.
-    var needsEllipsis: Bool { self == .toggleLostMode || self == .lock || self == .rename }
+    public var needsEllipsis: Bool { self == .toggleLostMode || self == .lock || self == .rename }
 
-    var symbolName: String {
+    public var symbolName: String {
         switch self {
         case .showInfo: return "info.circle"
         case .networkInfo: return "wifi"
@@ -215,11 +215,11 @@ enum DeviceAction: String, CaseIterable, Identifiable {
         }
     }
 
-    func isAvailable(for type: DeviceType) -> Bool { !mobileOnly || type == .mobile }
+    public func isAvailable(for type: DeviceType) -> Bool { !mobileOnly || type == .mobile }
 }
 
 /// Less common, higher-impact commands, grouped under "Advanced" in menus.
-enum AdvancedCommand: String, CaseIterable, Identifiable {
+public enum AdvancedCommand: String, CaseIterable, Identifiable {
     case restart
     case shutDown
     case blankPush
@@ -228,9 +228,9 @@ enum AdvancedCommand: String, CaseIterable, Identifiable {
     case wipe
     case delete
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .restart: return "Restart Device"
         case .shutDown: return "Shut Down Device"
@@ -243,9 +243,9 @@ enum AdvancedCommand: String, CaseIterable, Identifiable {
     }
 
     /// Prompts get an ellipsis in menus.
-    var needsEllipsis: Bool { self != .blankPush }
+    public var needsEllipsis: Bool { self != .blankPush }
 
-    var symbolName: String {
+    public var symbolName: String {
         switch self {
         case .restart: return "arrow.clockwise.circle"
         case .shutDown: return "power"
@@ -258,19 +258,19 @@ enum AdvancedCommand: String, CaseIterable, Identifiable {
     }
 
     /// Passcode commands only exist for mobile devices.
-    func applies(to type: DeviceType) -> Bool {
+    public func applies(to type: DeviceType) -> Bool {
         switch self {
         case .clearPasscode, .clearScreenTime: return type == .mobile
         default: return true
         }
     }
 
-    static func available(for type: DeviceType) -> [AdvancedCommand] {
+    public static func available(for type: DeviceType) -> [AdvancedCommand] {
         allCases.filter { $0.applies(to: type) }
     }
 
     /// Named so a "permission denied" message can tell the user exactly what to ask for.
-    func privilegeHint(for type: DeviceType) -> String {
+    public func privilegeHint(for type: DeviceType) -> String {
         switch self {
         case .wipe:
             return type == .computer ? "Send Computer Remote Wipe Command" : "Send Mobile Device Remote Wipe Command"
@@ -282,7 +282,7 @@ enum AdvancedCommand: String, CaseIterable, Identifiable {
     }
 
     /// Extra context for failures that usually mean the device doesn't qualify.
-    var supervisionNote: String? {
+    public var supervisionNote: String? {
         switch self {
         case .restart, .shutDown, .clearScreenTime:
             return "On mobile devices this command only works on supervised devices."

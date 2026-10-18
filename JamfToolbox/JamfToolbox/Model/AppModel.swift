@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
+import JamfToolboxCore
 
 /// A device the user has picked, resolved from the working list.
 struct DeviceRef: Hashable {

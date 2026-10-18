@@ -1,4 +1,5 @@
 import Foundation
+import JamfToolboxCore
 
 /// Owns `settings.json` and the Keychain-backed secrets.
 @MainActor

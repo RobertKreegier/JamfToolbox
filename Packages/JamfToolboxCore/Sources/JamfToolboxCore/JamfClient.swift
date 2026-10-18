@@ -5,8 +5,8 @@ import Foundation
 /// Uses the classic API (JSON responses) for searches, device detail and a few
 /// legacy commands, and the modern API for token auth and MDM commands
 /// (device name, lock, Lost Mode, inventory).
-actor JamfClient {
-    nonisolated let baseURL: String
+public actor JamfClient {
+    public nonisolated let baseURL: String
     private let authMethod: AuthMethod
     private let credentialA: String   // client ID, or username
     private let credentialB: String   // client secret, or password
@@ -16,7 +16,7 @@ actor JamfClient {
     private var tokenExpiry: Date?
     private var tokenTask: Task<(String, Date), Error>?
 
-    init(baseURL: String, authMethod: AuthMethod, credentialA: String, credentialB: String, tls: TLSPolicy) {
+    public init(baseURL: String, authMethod: AuthMethod, credentialA: String, credentialB: String, tls: TLSPolicy) {
         var trimmed = baseURL
         while trimmed.hasSuffix("/") { trimmed.removeLast() }
         self.baseURL = trimmed
@@ -99,7 +99,7 @@ actor JamfClient {
         return fresh
     }
 
-    func testConnection() async throws {
+    public func testConnection() async throws {
         token = nil
         tokenExpiry = nil
         _ = try await currentToken()
@@ -162,17 +162,17 @@ actor JamfClient {
         URLEncoding.quote(query.isEmpty ? "*" : "*\(query)*")
     }
 
-    func searchComputers(_ query: String) async throws -> [JSONValue] {
+    public func searchComputers(_ query: String) async throws -> [JSONValue] {
         let data = try await request("/JSSResource/computers/match/\(Self.matchPattern(query))")
         return data["computers"]?.arrayValue ?? []
     }
 
-    func searchMobileDevices(_ query: String) async throws -> [JSONValue] {
+    public func searchMobileDevices(_ query: String) async throws -> [JSONValue] {
         let data = try await request("/JSSResource/mobiledevices/match/\(Self.matchPattern(query))")
         return data["mobile_devices"]?.arrayValue ?? []
     }
 
-    func record(for type: DeviceType, id: String) async throws -> JSONValue {
+    public func record(for type: DeviceType, id: String) async throws -> JSONValue {
         guard let numeric = Int(id) else { throw ServiceError("Invalid device ID: \(id)") }
         switch type {
         case .computer:
@@ -234,7 +234,7 @@ actor JamfClient {
     /// Enable Lost Mode. Tries the classic EnableLostMode command first (it supports
     /// the sound option); if the server rejects it, falls back to the modern
     /// ENABLE_LOST_MODE MDM command.
-    func enableLostMode(id: String, message: String, phone: String, footnote: String,
+    public func enableLostMode(id: String, message: String, phone: String, footnote: String,
                         playSound: Bool) async throws -> String {
         let extra = "<lost_mode_message>\(XMLEscape.text(message))</lost_mode_message>"
             + "<lost_mode_phone>\(XMLEscape.text(phone))</lost_mode_phone>"
@@ -268,7 +268,7 @@ actor JamfClient {
 
     /// The classic DisableLostMode command returns HTTP 400 on current Jamf Pro
     /// versions; DISABLE_LOST_MODE on the MDM commands endpoint is the supported route.
-    func disableLostMode(id: String) async throws -> String {
+    public func disableLostMode(id: String) async throws -> String {
         try await mobileMDMCommand(id: id, ["commandType": "DISABLE_LOST_MODE"])
         return "Disable Lost Mode command queued via MDM."
     }
@@ -276,12 +276,12 @@ actor JamfClient {
     /// The classic DeviceName command returns HTTP 400 on current Jamf Pro
     /// versions, so use a SETTINGS MDM command. The name travels in a JSON
     /// body, so any characters (spaces included) are fine.
-    func renameMobileDevice(id: String, newName: String) async throws -> String {
+    public func renameMobileDevice(id: String, newName: String) async throws -> String {
         try await mobileMDMCommand(id: id, ["commandType": "SETTINGS", "deviceName": newName])
         return "Set Device Name command queued via MDM."
     }
 
-    func updateInventoryMobile(id: String) async throws -> String {
+    public func updateInventoryMobile(id: String) async throws -> String {
         do {
             try await mobileMDMCommand(id: id, ["commandType": "DEVICE_INFORMATION"])
             return "Update Inventory command queued."
@@ -292,7 +292,7 @@ actor JamfClient {
     }
 
     /// Mobile devices lock with their existing passcode (Apple MDM behavior), so no PIN.
-    func lockMobileDevice(id: String, message: String = "", phone: String = "") async throws -> String {
+    public func lockMobileDevice(id: String, message: String = "", phone: String = "") async throws -> String {
         var command = ["commandType": "DEVICE_LOCK"]
         if !message.isEmpty { command["message"] = message }
         if !phone.isEmpty { command["phoneNumber"] = phone }
@@ -333,7 +333,7 @@ actor JamfClient {
 
     /// Lock a Mac with a 6-digit recovery PIN. Modern DEVICE_LOCK first (carrying
     /// the PIN), classic as a fallback for older servers.
-    func lockComputer(id: String, passcode: String, message: String = "") async throws -> String {
+    public func lockComputer(id: String, passcode: String, message: String = "") async throws -> String {
         var command = ["commandType": "DEVICE_LOCK", "pin": passcode]
         if !message.isEmpty { command["message"] = message }
         do {
@@ -350,7 +350,7 @@ actor JamfClient {
     /// Update the inventory record name, then send the SETTINGS MDM command so the
     /// change reaches the Mac itself. (The command type is SETTINGS, not
     /// SET_COMPUTER_NAME; the latter is rejected as unknown.)
-    func renameComputer(id: String, newName: String) async throws -> String {
+    public func renameComputer(id: String, newName: String) async throws -> String {
         let numeric = try numericID(id)
         let xml = "<computer><general><name>\(XMLEscape.text(newName))</name></general></computer>"
         try await request("/JSSResource/computers/id/\(numeric)", method: "PUT",
@@ -374,26 +374,26 @@ actor JamfClient {
     }
 
     /// Restarts immediately. Mobile devices must be supervised.
-    func restartDevice(type: DeviceType, id: String) async throws -> String {
+    public func restartDevice(type: DeviceType, id: String) async throws -> String {
         try await deviceMDM(type, id: id, ["commandType": "RESTART_DEVICE"])
         return "Restart command queued."
     }
 
     /// A shut-down device can't be powered back on remotely. Mobile devices must be supervised.
-    func shutDownDevice(type: DeviceType, id: String) async throws -> String {
+    public func shutDownDevice(type: DeviceType, id: String) async throws -> String {
         try await deviceMDM(type, id: id, ["commandType": "SHUT_DOWN_DEVICE"])
         return "Shut Down command queued."
     }
 
     /// Clears the Screen Time (restrictions) passcode. Supervised mobile devices only.
-    func clearScreenTimePasscode(id: String) async throws -> String {
+    public func clearScreenTimePasscode(id: String) async throws -> String {
         try await mobileMDMCommand(id: id, ["commandType": "CLEAR_RESTRICTIONS_PASSWORD"])
         return "Clear Screen Time Passcode command queued."
     }
 
     /// The modern command needs the device's unlock token; when the server
     /// doesn't expose one, fall back to the classic ClearPasscode command.
-    func clearPasscode(id: String) async throws -> String {
+    public func clearPasscode(id: String) async throws -> String {
         let token = try await mobileUnlockToken(id)
         if !token.isEmpty {
             do {
@@ -420,7 +420,7 @@ actor JamfClient {
 
     /// Wakes the device so it checks in. Blank push has its own endpoint (it is
     /// not an MDM command type); the classic command is the fallback.
-    func blankPush(type: DeviceType, id: String) async throws -> String {
+    public func blankPush(type: DeviceType, id: String) async throws -> String {
         let management: String
         if type == .computer {
             management = try await computerManagementID(id)
@@ -449,7 +449,7 @@ actor JamfClient {
     /// Erases the device. Computers require a 6-digit PIN. There is deliberately
     /// no second route: retrying a destructive command after an ambiguous
     /// failure could send it twice.
-    func eraseDevice(type: DeviceType, id: String, pin: String = "") async throws -> String {
+    public func eraseDevice(type: DeviceType, id: String, pin: String = "") async throws -> String {
         var data = ["commandType": "ERASE_DEVICE"]
         if type == .computer { data["pin"] = pin }
         try await deviceMDM(type, id: id, data)
@@ -457,7 +457,7 @@ actor JamfClient {
     }
 
     /// Removes the device record from Jamf Pro (the device itself is untouched).
-    func deleteDevice(type: DeviceType, id: String) async throws -> String {
+    public func deleteDevice(type: DeviceType, id: String) async throws -> String {
         let numeric = try numericID(id)
         let classic = type == .computer ? "/JSSResource/computers/id/\(numeric)"
                                         : "/JSSResource/mobiledevices/id/\(numeric)"
@@ -474,31 +474,31 @@ actor JamfClient {
     // MARK: Read access for audits
 
     /// A plain authenticated GET.
-    func get(_ path: String) async throws -> JSONValue { try await request(path) }
+    public func get(_ path: String) async throws -> JSONValue { try await request(path) }
 
     // MARK: Profile scope changes
 
     /// A profile's `<scope>` as Jamf Pro's Classic API returns it, in XML
     /// (the only format the Classic API accepts back).
-    func profileScopeXML(_ type: AuditObjects.ObjectType, id: String) async throws -> Data {
+    public func profileScopeXML(_ type: AuditObjects.ObjectType, id: String) async throws -> Data {
         try await rawRequest("/JSSResource/\(type.resource)/id/\(URLEncoding.quote(id))/subset/Scope",
                              accept: "application/xml")
     }
 
     /// Replaces a profile's scope. `body` is the whole `<scope>` inside the
     /// profile's root element, so nothing else about the profile is sent.
-    func putProfileScope(_ type: AuditObjects.ObjectType, id: String, body: Data) async throws {
+    public func putProfileScope(_ type: AuditObjects.ObjectType, id: String, body: Data) async throws {
         _ = try await rawRequest("/JSSResource/\(type.resource)/id/\(URLEncoding.quote(id))", method: "PUT",
                                  body: body, contentType: "application/xml", accept: "application/xml")
     }
 
-    nonisolated func webURL(page: String, id: String) -> URL? {
+    public nonisolated func webURL(page: String, id: String) -> URL? {
         URL(string: "\(baseURL)/\(page)?id=\(id)&o=r")
     }
 
     // MARK: Misc
 
-    nonisolated func deviceWebURL(type: DeviceType, id: String) -> URL? {
+    public nonisolated func deviceWebURL(type: DeviceType, id: String) -> URL? {
         let page = type == .computer ? "computers.html" : "mobileDevices.html"
         return URL(string: "\(baseURL)/\(page)?id=\(id)&o=r")
     }

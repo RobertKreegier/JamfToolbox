@@ -1,16 +1,16 @@
 import Foundation
 
-enum AuditCategory: String, CaseIterable, Identifiable {
+public enum AuditCategory: String, CaseIterable, Identifiable {
     case groups = "Static Groups"
     case profiles = "Configuration Profiles"
     case health = "Device Health"
     case policies = "Policies"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
 /// What a report asks for before it runs.
-enum AuditInput: Hashable {
+public enum AuditInput: Hashable {
     case kind          // computers or mobile devices
     case group         // a static group of the chosen kind
     case device        // a device from the working list of the chosen kind
@@ -21,37 +21,56 @@ enum AuditInput: Hashable {
 }
 
 /// What a report produced; the runner turns it into a saved `AuditResult`.
-struct AuditOutput {
-    var findings: [AuditFinding]
-    var scanned: Int
-    var subject: AuditSubject? = nil
-    var subtitle: String
-    var warnings: [String] = []
+public struct AuditOutput {
+    public var findings: [AuditFinding]
+    public var scanned: Int
+    public var subject: AuditSubject? = nil
+    public var subtitle: String
+    public var warnings: [String] = []
+
+    public init(findings: [AuditFinding], scanned: Int, subject: AuditSubject? = nil, subtitle: String, warnings: [String] = []) {
+        self.findings = findings
+        self.scanned = scanned
+        self.subject = subject
+        self.subtitle = subtitle
+        self.warnings = warnings
+    }
 }
 
-struct AuditReport: Identifiable {
-    let id: String
-    let category: AuditCategory
-    let title: String
-    let summary: String
-    let inputs: [AuditInput]
+public struct AuditReport: Identifiable {
+    public let id: String
+    public let category: AuditCategory
+    public let title: String
+    public let summary: String
+    public let inputs: [AuditInput]
     /// Which device kinds the kind picker offers (one entry hides the picker).
-    var kinds: [GroupKind] = GroupKind.allCases
-    let detailHeading: String
-    let run: (AuditContext, AuditParameters) async throws -> AuditOutput
+    public var kinds: [GroupKind] = GroupKind.allCases
+    public let detailHeading: String
+    public let run: (AuditContext, AuditParameters) async throws -> AuditOutput
 
-    func needs(_ input: AuditInput) -> Bool { inputs.contains(input) }
+    public func needs(_ input: AuditInput) -> Bool { inputs.contains(input) }
+
+    public init(id: String, category: AuditCategory, title: String, summary: String, inputs: [AuditInput], kinds: [GroupKind] = GroupKind.allCases, detailHeading: String, run: @escaping (AuditContext, AuditParameters) async throws -> AuditOutput) {
+        self.id = id
+        self.category = category
+        self.title = title
+        self.summary = summary
+        self.inputs = inputs
+        self.kinds = kinds
+        self.detailHeading = detailHeading
+        self.run = run
+    }
 }
 
 /// The audit catalog and the runner. Every report is read-only.
-enum AuditReports {
-    static let groupDependenciesID = "group-dependencies"
+public enum AuditReports {
+    public static let groupDependenciesID = "group-dependencies"
 
-    static func report(_ id: String) -> AuditReport? { all.first { $0.id == id } }
-    static func reports(in category: AuditCategory) -> [AuditReport] { all.filter { $0.category == category } }
+    public static func report(_ id: String) -> AuditReport? { all.first { $0.id == id } }
+    public static func reports(in category: AuditCategory) -> [AuditReport] { all.filter { $0.category == category } }
 
     /// Runs a report and packages the outcome for saving.
-    static func run(_ report: AuditReport, parameters: AuditParameters, client: JamfClient,
+    public static func run(_ report: AuditReport, parameters: AuditParameters, client: JamfClient,
                     progress: @escaping @MainActor (AuditProgress) -> Void) async throws -> AuditResult {
         let context = AuditContext(client: client, progress: progress)
         let output = try await report.run(context, parameters)
@@ -63,7 +82,7 @@ enum AuditReports {
 
     // MARK: Catalog
 
-    static let all: [AuditReport] = [
+    public static let all: [AuditReport] = [
         // Static groups
         AuditReport(id: groupDependenciesID, category: .groups, title: "Group Dependencies",
                     summary: "Everything that depends on a static group: what it's scoped to, excluded from, or limited by, and any smart group or advanced search whose criteria name it. Use before renaming or deleting a group.",
@@ -174,7 +193,7 @@ enum AuditReports {
         return f
     }()
 
-    static func lastSeenText(_ date: Date?, now: Date = Date()) -> String {
+    public static func lastSeenText(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "Never" }
         let days = Int(now.timeIntervalSince(date) / 86_400)
         return "\(dayFormat.string(from: date)) (\(days) day\(days == 1 ? "" : "s") ago)"
@@ -199,7 +218,7 @@ enum AuditReports {
 
     // MARK: - Static groups
 
-    static func groupDependencies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func groupDependencies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let groupID = try requireGroup(p)
         let group = try await context.group(p.kind, id: groupID)
         let name = group.name.isEmpty ? (p.groupName ?? groupID) : group.name
@@ -222,7 +241,7 @@ enum AuditReports {
                            subtitle: "\(p.kind.label) static group · \(group.members.count) member(s)")
     }
 
-    static func emptyGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func emptyGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var findings: [AuditFinding] = []
         var scanned = 0
         for kind in GroupKind.allCases {
@@ -233,7 +252,7 @@ enum AuditReports {
         return AuditOutput(findings: sortFindings(findings), scanned: scanned, subtitle: "All computer and mobile device groups")
     }
 
-    static func unusedGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func unusedGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let objects = try await context.scopedObjects(AuditObjects.scopedTypes)
         var findings: [AuditFinding] = []
         var scanned = 0
@@ -256,7 +275,7 @@ enum AuditReports {
                            subtitle: "All groups, checked against \(objects.count) scoped objects")
     }
 
-    static func staleGroupMembers(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func staleGroupMembers(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let groupID = try requireGroup(p)
         let group = try await context.group(p.kind, id: groupID)
         let inventory = Dictionary(try await context.inventory(p.kind).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -282,7 +301,7 @@ enum AuditReports {
         String(name.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }
 
-    static func editDistance(_ a: String, _ b: String) -> Int {
+    public static func editDistance(_ a: String, _ b: String) -> Int {
         let a = Array(a), b = Array(b)
         if a.isEmpty { return b.count }
         if b.isEmpty { return a.count }
@@ -297,7 +316,7 @@ enum AuditReports {
         return previous[b.count]
     }
 
-    static func duplicateGroupNames(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func duplicateGroupNames(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var findings: [AuditFinding] = []
         var scanned = 0
         for kind in GroupKind.allCases {
@@ -332,7 +351,7 @@ enum AuditReports {
     }
 
     /// Splits a pasted list or CSV into values: one per line, first column.
-    static func pastedValues(_ text: String) -> [String] {
+    public static func pastedValues(_ text: String) -> [String] {
         var seen = Set<String>()
         return text.components(separatedBy: .newlines).compactMap { line in
             let first = line.split(whereSeparator: { $0 == "," || $0 == "\t" || $0 == ";" }).first.map(String.init) ?? ""
@@ -342,7 +361,7 @@ enum AuditReports {
         }
     }
 
-    static func compareGroupToList(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func compareGroupToList(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let groupID = try requireGroup(p)
         let values = pastedValues(p.pastedList)
         guard !values.isEmpty else { throw ServiceError("Paste at least one serial number, name, UDID or MAC address.") }
@@ -377,7 +396,7 @@ enum AuditReports {
                            subtitle: "\(group.members.count) member(s) compared with \(listCount) listed")
     }
 
-    static func deviceGroupMemberships(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func deviceGroupMemberships(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let deviceID = try requireDevice(p)
         let record = try await context.classicDevice(p.kind, id: deviceID)
         let name = record["general"]?["name"]?.text ?? p.deviceName ?? deviceID
@@ -424,7 +443,7 @@ enum AuditReports {
         return result
     }
 
-    static func profileScopeGaps(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func profileScopeGaps(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await profiles(context, kinds: GroupKind.allCases)
         var findings: [AuditFinding] = []
         for (kind, profile) in all {
@@ -438,7 +457,7 @@ enum AuditReports {
         return AuditOutput(findings: sortFindings(findings), scanned: all.count, subtitle: "All configuration profiles")
     }
 
-    static func profileBadGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func profileBadGroups(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await profiles(context, kinds: GroupKind.allCases)
         var groupsByKind: [GroupKind: [String: GroupRecord]] = [:]
         for kind in GroupKind.allCases {
@@ -464,7 +483,7 @@ enum AuditReports {
     }
 
     /// Payload types meant to be installed several times side by side.
-    static let stackingPayloadTypes: Set<String> = [
+    public static let stackingPayloadTypes: Set<String> = [
         "com.apple.wifi.managed", "com.apple.security.pkcs1", "com.apple.security.pkcs12", "com.apple.security.root",
         "com.apple.security.pem", "com.apple.security.scep", "com.apple.security.acme", "com.apple.vpn.managed",
         "com.apple.vpn.managed.applayer", "com.apple.webClip.managed", "com.apple.font", "com.apple.mail.managed",
@@ -474,7 +493,7 @@ enum AuditReports {
     ]
 
     /// PayloadType values inside a profile's payload plist (top-level "Configuration" excluded).
-    static func payloadTypes(_ profile: JSONValue) -> Set<String> {
+    public static func payloadTypes(_ profile: JSONValue) -> Set<String> {
         let plist = profile["general"]?["payloads"]?.text ?? ""
         guard !plist.isEmpty,
               let regex = try? NSRegularExpression(pattern: "<key>PayloadType</key>\\s*<string>([^<]+)</string>") else { return [] }
@@ -484,7 +503,7 @@ enum AuditReports {
             .filter { $0 != "Configuration" })
     }
 
-    static func profileOverlap(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func profileOverlap(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await context.scopedObjects([AuditObjects.profileType(p.kind)])
         let prepared = all.map { profile in
             (profile, ScopeReading.scope(of: profile.root, kind: p.kind),
@@ -513,7 +532,7 @@ enum AuditReports {
                            warnings: findings.isEmpty ? [] : ["Overlap is judged from direct device and group targets; buildings, departments, users and smart-group membership aren't evaluated."])
     }
 
-    static func profileInstallStatus(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func profileInstallStatus(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let failed = try await context.mdmCommands(state: "Error")
         let pending = try await context.mdmCommands(state: "Pending")
         // Profile names, by id, for both kinds.
@@ -548,35 +567,42 @@ enum AuditReports {
     }
 
     /// What a device's classic record says about its groups and installed profiles.
-    struct DeviceFacts {
-        let id: String
-        let name: String
-        let groupIDs: Set<String>
+    public struct DeviceFacts {
+        public let id: String
+        public let name: String
+        public let groupIDs: Set<String>
         /// Lower-cased; computer records list memberships by name only.
-        let groupNames: Set<String>
-        let installed: [(id: String, name: String, uuid: String)]
+        public let groupNames: Set<String>
+        public let installed: [(id: String, name: String, uuid: String)]
         /// The assigned user's username, lower-cased ("" if none).
-        let username: String
+        public let username: String
         /// From User and Location, as names ("" if none).
-        let building: String
-        let department: String
+        public let building: String
+        public let department: String
         /// The Jamf user groups (ids) the assigned user belongs to, among those
         /// the profiles refer to. Filled in by `loadUserGroups`.
-        var userGroupIDs: Set<String> = []
+        public var userGroupIDs: Set<String> = []
         /// Building and department ids, when known (the Jamf Pro API inventory has them).
-        var buildingID = ""
-        var departmentID = ""
+        public var buildingID = ""
+        public var departmentID = ""
 
         /// How the device's assigned user, building and department reach a
         /// profile's scope: "user “jdoe”", "department “Tech”", ….
-        struct LocationMatch {
-            var targets: [String] = []
-            var exclusions: [String] = []
-            var targetedByUser = false
-            var excludedByUser = false
+        public struct LocationMatch {
+            public var targets: [String] = []
+            public var exclusions: [String] = []
+            public var targetedByUser = false
+            public var excludedByUser = false
+
+            public init(targets: [String] = [], exclusions: [String] = [], targetedByUser: Bool = false, excludedByUser: Bool = false) {
+                self.targets = targets
+                self.exclusions = exclusions
+                self.targetedByUser = targetedByUser
+                self.excludedByUser = excludedByUser
+            }
         }
 
-        func locationMatch(_ scope: ScopeReading.Scope) -> LocationMatch {
+        public func locationMatch(_ scope: ScopeReading.Scope) -> LocationMatch {
             var match = LocationMatch()
             /// The scope entry's name if the device's building/department is in `list` (by id, else name).
             func find(_ list: [String: String], id: String, name: String) -> String? {
@@ -608,12 +634,12 @@ enum AuditReports {
             return match
         }
 
-        func inGroup(_ id: String, _ name: String) -> Bool {
+        public func inGroup(_ id: String, _ name: String) -> Bool {
             groupIDs.contains(id) || (!name.isEmpty && groupNames.contains(name.lowercased()))
         }
 
         /// The installed entry that is this Jamf profile, if any.
-        func installedIndex(of profile: ScopedObject, kind: GroupKind) -> Int? {
+        public func installedIndex(of profile: ScopedObject, kind: GroupKind) -> Int? {
             let uuid = profile.root["general"]?["uuid"]?.text ?? ""
             return installed.firstIndex { item in
                 (!item.id.isEmpty && item.id == profile.id && kind == .computer)
@@ -621,9 +647,23 @@ enum AuditReports {
                     || (!item.name.isEmpty && item.name == profile.name)
             }
         }
+
+        public init(id: String, name: String, groupIDs: Set<String>, groupNames: Set<String>, installed: [(id: String, name: String, uuid: String)], username: String, building: String, department: String, userGroupIDs: Set<String> = [], buildingID: String = "", departmentID: String = "") {
+            self.id = id
+            self.name = name
+            self.groupIDs = groupIDs
+            self.groupNames = groupNames
+            self.installed = installed
+            self.username = username
+            self.building = building
+            self.department = department
+            self.userGroupIDs = userGroupIDs
+            self.buildingID = buildingID
+            self.departmentID = departmentID
+        }
     }
 
-    static func deviceFacts(_ context: AuditContext, _ p: AuditParameters) async throws -> DeviceFacts {
+    public static func deviceFacts(_ context: AuditContext, _ p: AuditParameters) async throws -> DeviceFacts {
         let deviceID = try requireDevice(p)
         let record = try await context.classicDevice(p.kind, id: deviceID)
         let name = record["general"]?[p.kind == .computer ? "name" : "display_name"]?.text
@@ -652,7 +692,7 @@ enum AuditReports {
     }
 
     /// Looks up which user groups the profiles refer to contain the device's user.
-    static func loadUserGroups(_ device: inout DeviceFacts, _ profiles: [ScopedObject], kind: GroupKind,
+    public static func loadUserGroups(_ device: inout DeviceFacts, _ profiles: [ScopedObject], kind: GroupKind,
                                _ context: AuditContext) async throws {
         var ids = Set<String>()
         for profile in profiles {
@@ -664,7 +704,7 @@ enum AuditReports {
                                                            among: ids.filter { !$0.hasPrefix("#") })
     }
 
-    static func deviceProfiles(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func deviceProfiles(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var device = try await deviceFacts(context, p)
         let profiles = try await context.scopedObjects([AuditObjects.profileType(p.kind)])
         try await loadUserGroups(&device, profiles, kind: p.kind, context)
@@ -709,15 +749,23 @@ enum AuditReports {
     }
 
     /// How a profile's scope reaches one device: "directly", "via static group “X”, user “jdoe”", …
-    struct Routes {
-        var targets = ""
-        var exclusions = ""
-        var targetedDirectly = false
-        var excludedDirectly = false
-        var location = DeviceFacts.LocationMatch()
+    public struct Routes {
+        public var targets = ""
+        public var exclusions = ""
+        public var targetedDirectly = false
+        public var excludedDirectly = false
+        public var location = DeviceFacts.LocationMatch()
+
+        public init(targets: String = "", exclusions: String = "", targetedDirectly: Bool = false, excludedDirectly: Bool = false, location: DeviceFacts.LocationMatch = DeviceFacts.LocationMatch()) {
+            self.targets = targets
+            self.exclusions = exclusions
+            self.targetedDirectly = targetedDirectly
+            self.excludedDirectly = excludedDirectly
+            self.location = location
+        }
     }
 
-    static func routes(_ scope: ScopeReading.Scope, to device: DeviceFacts, kind: GroupKind,
+    public static func routes(_ scope: ScopeReading.Scope, to device: DeviceFacts, kind: GroupKind,
                        groupLabel: (String, String) -> String) -> Routes {
         var routes = Routes()
         var targetVia: [String] = []
@@ -740,7 +788,7 @@ enum AuditReports {
     }
 
     /// Every profile that targets, excludes or is installed on one device, and how.
-    static func deviceProfileTargeting(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func deviceProfileTargeting(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var device = try await deviceFacts(context, p)
         // Group list, to tell static from smart groups.
         await context.status("Listing \(p.kind.label.lowercased()) groups…")
@@ -802,7 +850,7 @@ enum AuditReports {
     /// Every device that a profile both targets and excludes, by any route: e.g.
     /// targeted through a group and excluded through another group, its user or
     /// its department. The exclusion wins, so these devices don't get the profile.
-    static func devicesTargetedAndExcluded(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func devicesTargetedAndExcluded(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let kind = p.kind
         let profiles = try await context.scopedObjects([AuditObjects.profileType(kind)])
         let scoped = profiles.map { ($0, ScopeReading.scope(of: $0.root, kind: kind)) }.filter { $0.1.hasExclusions }
@@ -858,7 +906,7 @@ enum AuditReports {
 
     // MARK: - Device health
 
-    static func staleDevices(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func staleDevices(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let devices = try await context.inventory(p.kind)
         let cutoff = Date().addingTimeInterval(-Double(p.days) * 86_400)
         let findings = devices.filter { ($0.lastSeen ?? .distantPast) < cutoff }
@@ -868,7 +916,7 @@ enum AuditReports {
                            subtitle: "\(p.kind.pluralLabel.capitalized) · not seen in \(p.days) days")
     }
 
-    static func unsupervisedDevices(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func unsupervisedDevices(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let devices = try await context.inventory(.mobile)
         let findings = devices.filter { $0.supervised == false && $0.managed != false }
             .map { deviceFinding($0, "Not supervised") }
@@ -876,7 +924,7 @@ enum AuditReports {
     }
 
     /// Compares dotted version strings numerically: 14.10 > 14.9.
-    static func version(_ a: String, isBelow b: String) -> Bool {
+    public static func version(_ a: String, isBelow b: String) -> Bool {
         let x = a.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
         let y = b.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
         for i in 0..<max(x.count, y.count) {
@@ -886,7 +934,7 @@ enum AuditReports {
         return false
     }
 
-    static func osBelowTarget(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func osBelowTarget(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let target = p.osVersion.trimmingCharacters(in: .whitespaces)
         guard target.first?.isNumber == true else { throw ServiceError("Enter a target version, such as 15.4 or 18.0.") }
         let devices = try await context.inventory(p.kind)
@@ -899,7 +947,7 @@ enum AuditReports {
                            warnings: unknown > 0 ? ["\(unknown) device(s) haven't reported an OS version and weren't checked."] : [])
     }
 
-    static func fileVaultOff(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func fileVaultOff(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let devices = try await context.inventory(.computer)
         let findings = devices.compactMap { device -> AuditFinding? in
             let state = device.fileVaultState.uppercased()
@@ -911,7 +959,7 @@ enum AuditReports {
         return AuditOutput(findings: sortFindings(findings), scanned: devices.count, subtitle: "All computers")
     }
 
-    static func noAssignedUser(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func noAssignedUser(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let devices = try await context.inventory(p.kind)
         let findings = devices.filter { $0.username.trimmingCharacters(in: .whitespaces).isEmpty }
             .map { deviceFinding($0, "No username") }
@@ -919,7 +967,7 @@ enum AuditReports {
                            subtitle: "\(p.kind.pluralLabel.capitalized) · User and Location")
     }
 
-    static func duplicateSerials(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func duplicateSerials(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         var devices: [DeviceRecord] = []
         for kind in GroupKind.allCases { devices += try await context.inventory(kind) }
         let bySerial = Dictionary(grouping: devices.filter { !$0.serial.isEmpty }, by: { $0.serial.uppercased() })
@@ -933,7 +981,7 @@ enum AuditReports {
         return AuditOutput(findings: findings, scanned: devices.count, subtitle: "All computers and mobile devices")
     }
 
-    static func pendingCommands(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func pendingCommands(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let threshold = max(1, p.threshold)
         let pending = try await context.mdmCommands(state: "Pending")
         var devices: [String: DeviceRecord] = [:]
@@ -967,7 +1015,7 @@ enum AuditReports {
         try await context.scopedObjects([AuditObjects.policy])
     }
 
-    static func disabledScopedPolicies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func disabledScopedPolicies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await policies(context)
         let findings = all.filter { policy in
             !AuditObjects.isTrue(policy.root["general"]?["enabled"])
@@ -976,7 +1024,7 @@ enum AuditReports {
         return AuditOutput(findings: sortFindings(findings), scanned: all.count, subtitle: "All policies")
     }
 
-    static func unscopedPolicies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func unscopedPolicies(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await policies(context)
         let findings = all.filter { policy in
             AuditObjects.isTrue(policy.root["general"]?["enabled"])
@@ -985,7 +1033,7 @@ enum AuditReports {
         return AuditOutput(findings: sortFindings(findings), scanned: all.count, subtitle: "All policies")
     }
 
-    static func recentPolicyFailures(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func recentPolicyFailures(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let computers = try await context.inventory(.computer)
         let cutoff = Date().addingTimeInterval(-Double(p.days) * 86_400)
         let history = try await context.policyLogs(computers)
@@ -1018,7 +1066,7 @@ enum AuditReports {
                            subtitle: "Policy history of \(computers.count) computers · last \(p.days) days")
     }
 
-    static func ongoingWithoutTrigger(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
+    public static func ongoingWithoutTrigger(_ context: AuditContext, _ p: AuditParameters) async throws -> AuditOutput {
         let all = try await policies(context)
         let triggers = ["trigger_checkin", "trigger_enrollment_complete", "trigger_login", "trigger_logout",
                         "trigger_network_state_changed", "trigger_startup"]

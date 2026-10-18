@@ -1,4 +1,5 @@
 import Foundation
+import JamfToolboxCore
 
 /// Changing how a device is scoped by configuration profiles, from a
 /// Config Profiles in Scope result.

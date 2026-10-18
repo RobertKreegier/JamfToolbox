@@ -2,48 +2,58 @@ import Foundation
 import Security
 
 /// A user-facing error from talking to Jamf Pro or Meraki.
-struct ServiceError: LocalizedError {
-    let message: String
+public struct ServiceError: LocalizedError {
+    public let message: String
     /// True for HTTP 404, which callers treat as "that device no longer exists".
-    var isNotFound = false
+    public var isNotFound = false
     /// True for HTTP 403: the account is authenticated but lacks a privilege.
-    var isPermissionDenied = false
+    public var isPermissionDenied = false
 
-    init(_ message: String, isNotFound: Bool = false, isPermissionDenied: Bool = false) {
+    public init(_ message: String, isNotFound: Bool = false, isPermissionDenied: Bool = false) {
         self.message = message
         self.isNotFound = isNotFound
         self.isPermissionDenied = isPermissionDenied
     }
 
-    var errorDescription: String? { message }
+    public var errorDescription: String? { message }
 }
 
-typealias JamfError = ServiceError
-typealias MerakiError = ServiceError
+public typealias JamfError = ServiceError
+public typealias MerakiError = ServiceError
 
 /// How server certificates are judged.
-struct TLSPolicy: Equatable {
+public struct TLSPolicy: Equatable {
     /// When false, any certificate is accepted (discouraged).
-    var verify = true
+    public var verify = true
     /// Optional PEM/DER file of extra trusted roots for internal CAs. Added to
     /// the system trust store rather than replacing it.
-    var caBundlePath = ""
+    public var caBundlePath = ""
+
+    public init(verify: Bool = true, caBundlePath: String = "") {
+        self.verify = verify
+        self.caBundlePath = caBundlePath
+    }
 }
 
-struct HTTPResult {
-    let status: Int
-    let data: Data
+public struct HTTPResult {
+    public let status: Int
+    public let data: Data
+
+    public init(status: Int, data: Data) {
+        self.status = status
+        self.data = data
+    }
 }
 
 /// URLSession wrapper that applies a `TLSPolicy`.
 ///
 /// Uses an ephemeral session so no cookies or cache are shared between
 /// requests, matching the behavior of the original `urllib` client.
-final class HTTPTransport {
+public final class HTTPTransport {
     private let session: URLSession
     private let delegate: TLSDelegate
 
-    init(policy: TLSPolicy) {
+    public init(policy: TLSPolicy) {
         delegate = TLSDelegate(policy: policy)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
@@ -56,7 +66,7 @@ final class HTTPTransport {
 
     deinit { session.invalidateAndCancel() }
 
-    func send(_ request: URLRequest) async throws -> HTTPResult {
+    public func send(_ request: URLRequest) async throws -> HTTPResult {
         try delegate.validateBundle()
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -64,7 +74,7 @@ final class HTTPTransport {
     }
 
     /// Turn a low-level failure into something worth showing.
-    static func explain(_ error: Error, host: String) -> Error {
+    public static func explain(_ error: Error, host: String) -> Error {
         if let service = error as? ServiceError { return service }
         guard let urlError = error as? URLError else { return error }
         switch urlError.code {
@@ -196,20 +206,20 @@ private final class TLSDelegate: NSObject, URLSessionTaskDelegate {
     }
 }
 
-enum URLEncoding {
+public enum URLEncoding {
     /// Matches Python's `urllib.parse.quote` defaults: letters, digits and
     /// `_.-~` stay as-is, and so does `/`. Everything else (including `*`
     /// and `:`) is percent-encoded.
-    static func quote(_ text: String) -> String {
+    public static func quote(_ text: String) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "_.-~/")
         return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
     }
 }
 
-enum XMLEscape {
+public enum XMLEscape {
     /// Same three characters Python's `xml.sax.saxutils.escape` handles.
-    static func text(_ s: String) -> String {
+    public static func text(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
