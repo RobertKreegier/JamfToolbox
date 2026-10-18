@@ -5,7 +5,7 @@ import Foundation
 /// Device records are shown to the user in the order Jamf sent them, which
 /// `JSONSerialization`'s unordered dictionaries cannot do. Numbers keep their
 /// original text so `12` stays `12` and `1.5` stays `1.5`.
-enum JSONValue {
+public enum JSONValue {
     case null
     case bool(Bool)
     case number(String)
@@ -13,11 +13,11 @@ enum JSONValue {
     case array([JSONValue])
     case object([(key: String, value: JSONValue)])
 
-    static let emptyObject = JSONValue.object([])
+    public static let emptyObject = JSONValue.object([])
 
     // MARK: Access
 
-    subscript(key: String) -> JSONValue? {
+    public subscript(key: String) -> JSONValue? {
         if case .object(let entries) = self {
             return entries.first { $0.key == key }?.value
         }
@@ -25,7 +25,7 @@ enum JSONValue {
     }
 
     /// A copy of this object with `key` set (replacing any existing value).
-    func setting(_ key: String, to value: JSONValue) -> JSONValue {
+    public func setting(_ key: String, to value: JSONValue) -> JSONValue {
         guard case .object(var entries) = self else { return self }
         if let index = entries.firstIndex(where: { $0.key == key }) {
             entries[index].value = value
@@ -35,12 +35,12 @@ enum JSONValue {
         return .object(entries)
     }
 
-    var arrayValue: [JSONValue]? {
+    public var arrayValue: [JSONValue]? {
         if case .array(let items) = self { return items }
         return nil
     }
 
-    var isContainer: Bool {
+    public var isContainer: Bool {
         switch self {
         case .array, .object: return true
         default: return false
@@ -50,7 +50,7 @@ enum JSONValue {
     /// The value as display text, with "empty" values collapsing to "".
     /// Mirrors the Python `value or ""` idiom: strings and numbers give their
     /// text, `true` gives "true", and null/false/containers give "".
-    var text: String {
+    public var text: String {
         switch self {
         case .string(let s): return s
         case .number(let n): return n
@@ -60,7 +60,7 @@ enum JSONValue {
     }
 
     /// One-line text for a tree row's value column.
-    var preview: String {
+    public var preview: String {
         switch self {
         case .object(let entries): return "{\(entries.count) field(s)}"
         case .array(let items): return "[\(items.count) item(s)]"
@@ -74,7 +74,7 @@ enum JSONValue {
     // MARK: Serialization
 
     /// Pretty-printed JSON (two-space indent), keys in their original order.
-    func prettyPrinted(level: Int = 0) -> String {
+    public func prettyPrinted(level: Int = 0) -> String {
         let pad = String(repeating: "  ", count: level + 1)
         let closePad = String(repeating: "  ", count: level)
         switch self {
@@ -119,7 +119,7 @@ enum JSONValue {
 
     // MARK: Parsing
 
-    static func parse(_ data: Data) throws -> JSONValue {
+    public static func parse(_ data: Data) throws -> JSONValue {
         var parser = Parser(bytes: [UInt8](data))
         parser.skipWhitespace()
         let value = try parser.parseValue(depth: 0)
@@ -128,7 +128,7 @@ enum JSONValue {
         return value
     }
 
-    enum ParseError: Error {
+    public enum ParseError: Error {
         case unexpectedEnd, unexpectedCharacter, invalidNumber, invalidEscape, tooDeep, trailingContent
     }
 

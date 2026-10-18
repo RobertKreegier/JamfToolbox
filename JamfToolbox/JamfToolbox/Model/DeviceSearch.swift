@@ -1,4 +1,5 @@
 import Foundation
+import JamfToolboxCore
 
 /// Type-ahead search over Jamf Pro for the main window's search field.
 /// Results appear in a dropdown; choosing one adds it to the working list.

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 extension AppModel {
     /// Advanced commands act on one device at a time: they are disruptive

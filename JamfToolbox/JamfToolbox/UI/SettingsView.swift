@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import JamfToolboxCore
 
 /// Everything the Settings window edits. Changes stay in this draft until Save,
 /// so Cancel (or just closing the window) discards them and credentials only

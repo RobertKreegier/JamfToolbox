@@ -1,4 +1,5 @@
 import Foundation
+import JamfToolboxCore
 
 /// The activity log and status line. Kept separate from `AppModel` so a new
 /// log line redraws only the log and status bar, not the device table.

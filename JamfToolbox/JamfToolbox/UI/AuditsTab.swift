@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// The Jamf Audits tab: saved results on the left; on the right, either the
 /// selected result or the form for running a new audit.

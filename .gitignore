@@ -10,3 +10,7 @@ DerivedData/
 # Release artifacts (attach DMGs to GitHub releases instead)
 dist/
 *.dmg
+
+# Swift packages
+.build/
+.swiftpm/

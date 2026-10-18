@@ -1,26 +1,26 @@
 import Foundation
 
-enum AuthMethod: String {
+public enum AuthMethod: String {
     case oauth   // API client (client ID + secret)
     case basic   // user account
 }
 
 /// A saved set of Lost Mode text. Fields may contain `{tags}`.
-struct LostModePreset: Codable, Hashable, Identifiable {
-    var id = UUID()
-    var name: String
-    var message: String
-    var phone = ""
-    var footnote = ""
+public struct LostModePreset: Codable, Hashable, Identifiable {
+    public var id = UUID()
+    public var name: String
+    public var message: String
+    public var phone = ""
+    public var footnote = ""
 
-    init(name: String, message: String, phone: String = "", footnote: String = "") {
+    public init(name: String, message: String, phone: String = "", footnote: String = "") {
         self.name = name
         self.message = message
         self.phone = phone
         self.footnote = footnote
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
         name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
@@ -31,17 +31,17 @@ struct LostModePreset: Codable, Hashable, Identifiable {
 }
 
 /// A saved lock-screen message. May contain `{tags}`.
-struct LockPreset: Codable, Hashable, Identifiable {
-    var id = UUID()
-    var name: String
-    var message: String
+public struct LockPreset: Codable, Hashable, Identifiable {
+    public var id = UUID()
+    public var name: String
+    public var message: String
 
-    init(name: String, message: String) {
+    public init(name: String, message: String) {
         self.name = name
         self.message = message
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
         name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
@@ -50,17 +50,17 @@ struct LockPreset: Codable, Hashable, Identifiable {
 }
 
 /// A saved device-name template, usable for computers and mobile devices alike.
-struct NamePreset: Codable, Hashable, Identifiable {
-    var id = UUID()
-    var name: String
-    var template: String
+public struct NamePreset: Codable, Hashable, Identifiable {
+    public var id = UUID()
+    public var name: String
+    public var template: String
 
-    init(name: String, template: String) {
+    public init(name: String, template: String) {
         self.name = name
         self.template = template
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
         name = (try? c.decode(String.self, forKey: .name)) ?? "Untitled"
@@ -73,36 +73,36 @@ struct NamePreset: Codable, Hashable, Identifiable {
 /// The file location, key names and value shapes are identical to the Python
 /// app's, so someone upgrading keeps their settings and saved device lists.
 /// Secrets are *not* part of this file; they live in the Keychain.
-struct Preferences: Codable {
-    var jamfURL = ""
-    var authMethod = AuthMethod.basic
-    var verifyNotes = true
-    var sslVerify = true
-    var sslCABundle = ""
+public struct Preferences: Codable {
+    public var jamfURL = ""
+    public var authMethod = AuthMethod.basic
+    public var verifyNotes = true
+    public var sslVerify = true
+    public var sslCABundle = ""
     /// The first preset is the default. Never empty.
-    var lostModePresets = [LostModePreset(name: "Default",
+    public var lostModePresets = [LostModePreset(name: "Default",
                                           message: "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
                                           footnote: "Property of Rock Ridge Public Schools")]
-    var lostModeSound = true
+    public var lostModeSound = true
     /// Device-name templates for Rename; the first is the default. Never empty.
-    var namePresets = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
-    static let defaultNameTemplate = "{realname} - {username} - {serial}"
-    var doubleClickAction = DeviceAction.openInJamf
+    public var namePresets = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
+    public static let defaultNameTemplate = "{realname} - {username} - {serial}"
+    public var doubleClickAction = DeviceAction.openInJamf
     /// nil means "use the default column set".
-    var listColumns: [String]?
+    public var listColumns: [String]?
     /// The first preset is the default. Never empty.
-    var lockPresets = [LockPreset(name: "Default",
+    public var lockPresets = [LockPreset(name: "Default",
                                   message: "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock.")]
-    var deviceListComputer: [DeviceEntry] = []
-    var deviceListMobile: [DeviceEntry] = []
-    var merakiOrgID = ""
-    var merakiOrgName = ""
-    var merakiNetworkID = ""
-    var merakiNetworkName = ""
+    public var deviceListComputer: [DeviceEntry] = []
+    public var deviceListMobile: [DeviceEntry] = []
+    public var merakiOrgID = ""
+    public var merakiOrgName = ""
+    public var merakiNetworkID = ""
+    public var merakiNetworkName = ""
     /// Fallback only: base64 secrets used when the Keychain can't be written.
-    var credentialsInFile: [String: String] = [:]
+    public var credentialsInFile: [String: String] = [:]
 
-    enum CodingKeys: String, CodingKey, CaseIterable {
+    public enum CodingKeys: String, CodingKey, CaseIterable {
         case jamfURL = "jamf_url"
         case authMethod = "auth_method"
         case verifyNotes = "verify_notes"
@@ -130,11 +130,11 @@ struct Preferences: Codable {
         case namePresets = "rename_presets"
     }
 
-    init() {}
+    public init() {}
 
     /// Missing or mistyped keys fall back to defaults one at a time, so a file
     /// from an older (or newer) version never prevents launch.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
             ((try? c.decodeIfPresent(T.self, forKey: key)) ?? nil) ?? fallback
@@ -189,7 +189,7 @@ struct Preferences: Codable {
         credentialsInFile = value(.credentialsInFile, credentialsInFile)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(jamfURL, forKey: .jamfURL)
         try c.encode(authMethod.rawValue, forKey: .authMethod)
@@ -222,30 +222,30 @@ struct Preferences: Codable {
 
     // MARK: Convenience
 
-    var defaultLostMode: LostModePreset { lostModePresets.first ?? Preferences().lostModePresets[0] }
-    var defaultLock: LockPreset { lockPresets.first ?? Preferences().lockPresets[0] }
+    public var defaultLostMode: LostModePreset { lostModePresets.first ?? Preferences().lostModePresets[0] }
+    public var defaultLock: LockPreset { lockPresets.first ?? Preferences().lockPresets[0] }
 
-    func deviceList(for type: DeviceType) -> [DeviceEntry] {
+    public func deviceList(for type: DeviceType) -> [DeviceEntry] {
         type == .computer ? deviceListComputer : deviceListMobile
     }
 
-    mutating func setDeviceList(_ list: [DeviceEntry], for type: DeviceType) {
+    public mutating func setDeviceList(_ list: [DeviceEntry], for type: DeviceType) {
         if type == .computer { deviceListComputer = list } else { deviceListMobile = list }
     }
 
-    var defaultName: NamePreset { namePresets.first ?? Preferences().namePresets[0] }
+    public var defaultName: NamePreset { namePresets.first ?? Preferences().namePresets[0] }
 
     /// The user's chosen columns, validated against the catalog.
-    var visibleColumns: [ColumnField] {
+    public var visibleColumns: [ColumnField] {
         let chosen = (listColumns ?? []).compactMap(ColumnField.init(rawValue:))
         return chosen.isEmpty ? ColumnField.defaults : chosen
     }
 
-    static func decode(from data: Data) -> Preferences {
+    public static func decode(from data: Data) -> Preferences {
         (try? JSONDecoder().decode(Preferences.self, from: data)) ?? Preferences()
     }
 
-    func encoded() throws -> Data {
+    public func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(self)

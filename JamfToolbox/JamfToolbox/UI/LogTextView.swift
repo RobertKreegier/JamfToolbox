@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// The activity log: selectable monospaced text that follows new output.
 /// An `NSTextView` lets the user select across lines, which a stack of

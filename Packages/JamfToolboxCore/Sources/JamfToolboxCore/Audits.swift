@@ -3,63 +3,76 @@ import Foundation
 // MARK: - Shared audit types
 
 /// Computers or mobile devices: which side of Jamf Pro an audit looks at.
-enum GroupKind: String, Codable, CaseIterable, Identifiable {
+public enum GroupKind: String, Codable, CaseIterable, Identifiable {
     case computer
     case mobile
 
-    var id: String { rawValue }
-    var label: String { self == .computer ? "Computer" : "Mobile Device" }
-    var pluralLabel: String { self == .computer ? "computers" : "mobile devices" }
+    public var id: String { rawValue }
+    public var label: String { self == .computer ? "Computer" : "Mobile Device" }
+    public var pluralLabel: String { self == .computer ? "computers" : "mobile devices" }
 
     /// Classic API resource for this kind of group.
-    var resource: String { self == .computer ? "computergroups" : "mobiledevicegroups" }
+    public var resource: String { self == .computer ? "computergroups" : "mobiledevicegroups" }
     /// Classic API resource for this kind of device.
-    var deviceResource: String { self == .computer ? "computers" : "mobiledevices" }
+    public var deviceResource: String { self == .computer ? "computers" : "mobiledevices" }
     /// The scope key that lists groups of this kind (`scope.computer_groups`, …).
-    var scopeKey: String { self == .computer ? "computer_groups" : "mobile_device_groups" }
+    public var scopeKey: String { self == .computer ? "computer_groups" : "mobile_device_groups" }
     /// The scope key that lists individual devices, and the group-record member list.
-    var membersKey: String { self == .computer ? "computers" : "mobile_devices" }
+    public var membersKey: String { self == .computer ? "computers" : "mobile_devices" }
     /// `scope.all_computers` / `scope.all_mobile_devices`.
-    var allKey: String { self == .computer ? "all_computers" : "all_mobile_devices" }
+    public var allKey: String { self == .computer ? "all_computers" : "all_mobile_devices" }
     /// The smart-group / advanced-search criterion that names a group of this kind.
-    var criterionName: String { self == .computer ? "Computer Group" : "Mobile Device Group" }
+    public var criterionName: String { self == .computer ? "Computer Group" : "Mobile Device Group" }
 
-    var deviceType: DeviceType { self == .computer ? .computer : .mobile }
-    init(_ type: DeviceType) { self = type == .computer ? .computer : .mobile }
+    public var deviceType: DeviceType { self == .computer ? .computer : .mobile }
+    public init(_ type: DeviceType) { self = type == .computer ? .computer : .mobile }
 
-    func groupLabel(smart: Bool) -> String { (smart ? "Smart " : "Static ") + label + " Group" }
+    public func groupLabel(smart: Bool) -> String { (smart ? "Smart " : "Static ") + label + " Group" }
 }
 
 /// A group as listed by Jamf Pro.
-struct GroupSummary: Identifiable, Hashable {
-    let id: String
-    let name: String
-    let isSmart: Bool
+public struct GroupSummary: Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let isSmart: Bool
+
+    public init(id: String, name: String, isSmart: Bool) {
+        self.id = id
+        self.name = name
+        self.isSmart = isSmart
+    }
 }
 
 /// What a group- or device-specific audit was run against.
-struct AuditSubject: Codable, Hashable {
-    var kind: GroupKind
-    var id: String
-    var name: String
-    var memberCount: Int?
+public struct AuditSubject: Codable, Hashable {
+    public var kind: GroupKind
+    public var id: String
+    public var name: String
+    public var memberCount: Int?
+
+    public init(kind: GroupKind, id: String, name: String, memberCount: Int? = nil) {
+        self.kind = kind
+        self.id = id
+        self.name = name
+        self.memberCount = memberCount
+    }
 }
 
 /// The inputs a report was run with. Saved with the result so it can be re-run.
-struct AuditParameters: Codable, Hashable {
-    var kind: GroupKind = .computer
-    var groupID: String?
-    var groupName: String?
-    var deviceID: String?
-    var deviceName: String?
-    var days = 30
-    var osVersion = ""
-    var pastedList = ""
-    var threshold = 5
+public struct AuditParameters: Codable, Hashable {
+    public var kind: GroupKind = .computer
+    public var groupID: String?
+    public var groupName: String?
+    public var deviceID: String?
+    public var deviceName: String?
+    public var days = 30
+    public var osVersion = ""
+    public var pastedList = ""
+    public var threshold = 5
 
-    init() {}
+    public init() {}
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         kind = (try? c.decode(GroupKind.self, forKey: .kind)) ?? .computer
         groupID = try? c.decodeIfPresent(String.self, forKey: .groupID)
@@ -74,30 +87,30 @@ struct AuditParameters: Codable, Hashable {
 }
 
 /// One row of an audit result.
-struct AuditFinding: Codable, Hashable, Identifiable {
-    var objectType: String
-    var objectName: String
-    var objectID: String
+public struct AuditFinding: Codable, Hashable, Identifiable {
+    public var objectType: String
+    public var objectName: String
+    public var objectID: String
     /// The report-specific detail: a relationship, an issue, a date, …
-    var detail: String
+    public var detail: String
     /// Jamf Pro web page for the object type, e.g. `policies.html`.
-    var webPage: String?
+    public var webPage: String?
     /// For a device's profiles: how the device is directly scoped, which
     /// decides the scope changes offered for the row.
-    var directScope: DirectScope?
+    public var directScope: DirectScope?
     /// For a device's profiles: whether the profile is installed on the device.
-    var installed: Bool?
+    public var installed: Bool?
     /// For rows about an object and one device (Devices Targeted and Excluded):
     /// the device, and how it's excluded (`detail` says how it's targeted).
-    var device: FindingDevice?
-    var excludedVia: String?
+    public var device: FindingDevice?
+    public var excludedVia: String?
 
     // "relationship" is the key results saved by the first audit used.
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case objectType, objectName, objectID, detail = "relationship", webPage, directScope, installed, device, excludedVia
     }
 
-    init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
+    public init(objectType: String, objectName: String, objectID: String, detail: String, webPage: String? = nil,
          directScope: DirectScope? = nil, installed: Bool? = nil) {
         self.objectType = objectType
         self.objectName = objectName
@@ -108,45 +121,51 @@ struct AuditFinding: Codable, Hashable, Identifiable {
         self.installed = installed
     }
 
-    var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" + (device.map { "|\($0.id)" } ?? "") }
+    public var id: String { "\(objectType)|\(objectID)|\(objectName)|\(detail)" + (device.map { "|\($0.id)" } ?? "") }
 
     /// Sort and display helpers for the device columns.
-    var deviceName: String { device?.name ?? "" }
-    var excludedText: String { excludedVia ?? "" }
+    public var deviceName: String { device?.name ?? "" }
+    public var excludedText: String { excludedVia ?? "" }
 
     /// "Yes", "No", or "" when the report doesn't say.
-    var installedText: String { installed.map { $0 ? "Yes" : "No" } ?? "" }
+    public var installedText: String { installed.map { $0 ? "Yes" : "No" } ?? "" }
 }
 
 /// A device a finding is about, alongside its object.
-struct FindingDevice: Codable, Hashable {
-    var kind: GroupKind
-    var id: String
-    var name: String
+public struct FindingDevice: Codable, Hashable {
+    public var kind: GroupKind
+    public var id: String
+    public var name: String
+
+    public init(kind: GroupKind, id: String, name: String) {
+        self.kind = kind
+        self.id = id
+        self.name = name
+    }
 }
 
 /// A saved audit run.
-struct AuditResult: Codable, Identifiable, Hashable {
-    var id = UUID()
-    var reportID: String
-    var report: String
-    var runAt: Date
+public struct AuditResult: Codable, Identifiable, Hashable {
+    public var id = UUID()
+    public var reportID: String
+    public var report: String
+    public var runAt: Date
     /// The Jamf Pro server the audit ran against.
-    var server: String
+    public var server: String
     /// The group or device the report was about, for group/device reports.
-    var subject: AuditSubject?
+    public var subject: AuditSubject?
     /// One line describing what was audited ("Mobile devices · not seen in 30 days").
-    var subtitle: String
+    public var subtitle: String
     /// Heading for the findings table's detail column.
-    var detailHeading: String
-    var parameters: AuditParameters?
-    var findings: [AuditFinding]
+    public var detailHeading: String
+    public var parameters: AuditParameters?
+    public var findings: [AuditFinding]
     /// Object types that couldn't be read, and other caveats. Non-empty means
     /// the findings may be incomplete.
-    var warnings: [String]
-    var objectsScanned: Int
+    public var warnings: [String]
+    public var objectsScanned: Int
 
-    init(reportID: String, report: String, runAt: Date, server: String, subject: AuditSubject?, subtitle: String,
+    public init(reportID: String, report: String, runAt: Date, server: String, subject: AuditSubject?, subtitle: String,
          detailHeading: String, parameters: AuditParameters?, findings: [AuditFinding], warnings: [String],
          objectsScanned: Int) {
         self.reportID = reportID
@@ -163,7 +182,7 @@ struct AuditResult: Codable, Identifiable, Hashable {
     }
 
     /// Tolerates results saved by earlier versions (only the group-dependencies report existed).
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         reportID = (try? c.decode(String.self, forKey: .reportID)) ?? AuditReports.groupDependenciesID
@@ -181,72 +200,89 @@ struct AuditResult: Codable, Identifiable, Hashable {
     }
 
     /// What the saved-results list shows in its Subject column.
-    var subjectLabel: String { subject?.name ?? subtitle }
+    public var subjectLabel: String { subject?.name ?? subtitle }
 }
 
-struct AuditProgress {
-    var done: Int
-    var total: Int
-    var message: String
+public struct AuditProgress {
+    public var done: Int
+    public var total: Int
+    public var message: String
+
+    public init(done: Int, total: Int, message: String) {
+        self.done = done
+        self.total = total
+        self.message = message
+    }
 }
 
 // MARK: - Jamf object types
 
 /// The Jamf Pro object types audits read or report, with their classic API
 /// resources and web pages (all page names confirmed against a real server).
-enum AuditObjects {
-    struct ObjectType: Hashable {
-        let label: String           // title case, shown in findings
-        let singular: String        // lower case, for summaries
-        let plural: String
-        let resource: String        // classic API resource
+public enum AuditObjects {
+    public struct ObjectType: Hashable {
+        public let label: String           // title case, shown in findings
+        public let singular: String        // lower case, for summaries
+        public let plural: String
+        public let resource: String        // classic API resource
         /// Classic API subset to request instead of the full record, if supported.
-        let subset: String?
-        let webPage: String
-        let kinds: Set<GroupKind>
-        var onlySmartGroups = false // group resources: static groups can't reference others
+        public let subset: String?
+        public let webPage: String
+        public let kinds: Set<GroupKind>
+        public var onlySmartGroups = false // group resources: static groups can't reference others
+
+        public init(label: String, singular: String, plural: String, resource: String, subset: String? = nil, webPage: String, kinds: Set<GroupKind>, onlySmartGroups: Bool = false) {
+            self.label = label
+            self.singular = singular
+            self.plural = plural
+            self.resource = resource
+            self.subset = subset
+            self.webPage = webPage
+            self.kinds = kinds
+            self.onlySmartGroups = onlySmartGroups
+        }
     }
 
-    static let policy = ObjectType(label: "Policy", singular: "policy", plural: "policies", resource: "policies",
+    public static let policy = ObjectType(label: "Policy", singular: "policy", plural: "policies", resource: "policies",
                                    subset: "General&Scope&SelfService", webPage: "policies.html", kinds: [.computer])
-    static let macProfile = ObjectType(label: "macOS Configuration Profile", singular: "macOS configuration profile",
+    public static let macProfile = ObjectType(label: "macOS Configuration Profile", singular: "macOS configuration profile",
                                        plural: "macOS configuration profiles", resource: "osxconfigurationprofiles",
                                        subset: "General&Scope", webPage: "OSXConfigurationProfiles.html", kinds: [.computer])
-    static let macApp = ObjectType(label: "Mac App", singular: "Mac app", plural: "Mac apps", resource: "macapplications",
+    public static let macApp = ObjectType(label: "Mac App", singular: "Mac app", plural: "Mac apps", resource: "macapplications",
                                    subset: "General&Scope", webPage: "macApps.html", kinds: [.computer])
-    static let restrictedSoftware = ObjectType(label: "Restricted Software", singular: "restricted software record",
+    public static let restrictedSoftware = ObjectType(label: "Restricted Software", singular: "restricted software record",
                                                plural: "restricted software records", resource: "restrictedsoftware",
                                                subset: "General&Scope", webPage: "restrictedSoftware.html", kinds: [.computer])
-    static let smartComputerGroup = ObjectType(label: "Smart Computer Group", singular: "smart computer group",
+    public static let smartComputerGroup = ObjectType(label: "Smart Computer Group", singular: "smart computer group",
                                                plural: "smart computer groups", resource: "computergroups", subset: nil,
                                                webPage: "smartComputerGroups.html", kinds: [.computer], onlySmartGroups: true)
-    static let computerSearch = ObjectType(label: "Advanced Computer Search", singular: "advanced computer search",
+    public static let computerSearch = ObjectType(label: "Advanced Computer Search", singular: "advanced computer search",
                                            plural: "advanced computer searches", resource: "advancedcomputersearches",
                                            subset: nil, webPage: "advancedComputerSearches.html", kinds: [.computer])
-    static let mobileProfile = ObjectType(label: "Mobile Device Configuration Profile",
+    public static let mobileProfile = ObjectType(label: "Mobile Device Configuration Profile",
                                           singular: "mobile device configuration profile",
                                           plural: "mobile device configuration profiles",
                                           resource: "mobiledeviceconfigurationprofiles", subset: "General&Scope",
                                           webPage: "iOSConfigurationProfiles.html", kinds: [.mobile])
-    static let mobileApp = ObjectType(label: "Mobile Device App", singular: "mobile device app", plural: "mobile device apps",
+    public static let mobileApp = ObjectType(label: "Mobile Device App", singular: "mobile device app", plural: "mobile device apps",
                                       resource: "mobiledeviceapplications", subset: "General&Scope",
                                       webPage: "mobileDeviceApps.html", kinds: [.mobile])
-    static let ebook = ObjectType(label: "eBook", singular: "eBook", plural: "eBooks", resource: "ebooks",
+    public static let ebook = ObjectType(label: "eBook", singular: "eBook", plural: "eBooks", resource: "ebooks",
                                   subset: "General&Scope", webPage: "eBooks.html", kinds: [.computer, .mobile])
-    static let smartMobileGroup = ObjectType(label: "Smart Mobile Device Group", singular: "smart mobile device group",
+    public static let smartMobileGroup = ObjectType(label: "Smart Mobile Device Group", singular: "smart mobile device group",
                                              plural: "smart mobile device groups", resource: "mobiledevicegroups",
                                              subset: nil, webPage: "smartMobileDeviceGroups.html", kinds: [.mobile],
                                              onlySmartGroups: true)
-    static let mobileSearch = ObjectType(label: "Advanced Mobile Device Search", singular: "advanced mobile device search",
+    public static let mobileSearch = ObjectType(label: "Advanced Mobile Device Search", singular: "advanced mobile device search",
                                          plural: "advanced mobile device searches",
                                          resource: "advancedmobiledevicesearches", subset: nil,
                                          webPage: "advancedMobileDeviceSearches.html", kinds: [.mobile])
 
     /// Everything that can refer to a group, in display order.
-    static let scopedTypes: [ObjectType] = [policy, macProfile, macApp, restrictedSoftware, smartComputerGroup,
+    public static let scopedTypes: [ObjectType] = [policy, macProfile, macApp, restrictedSoftware, smartComputerGroup,
                                             computerSearch, mobileProfile, mobileApp, ebook, smartMobileGroup, mobileSearch]
 
-    static func profileType(_ kind: GroupKind) -> ObjectType { kind == .computer ? macProfile : mobileProfile }
+    public static func profileType(_ kind: GroupKind) -> ObjectType { kind == .computer ? macProfile : mobileProfile }
 
     /// Labels for rows that aren't scoped objects: devices, groups, pasted entries.
     private static let otherTypes: [(label: String, singular: String, plural: String, page: String?)] = [
@@ -261,13 +297,13 @@ enum AuditObjects {
 
     /// Jamf Pro page for an object type, looked up when a link is opened so
     /// results saved before a page name was corrected still open correctly.
-    static func webPage(forObjectType label: String) -> String? {
+    public static func webPage(forObjectType label: String) -> String? {
         if let type = scopedTypes.first(where: { $0.label == label }) { return type.webPage }
         return otherTypes.first { $0.label == label }?.page
     }
 
     /// "2 policies, 1 smart computer group".
-    static func describeCounts(_ counts: [String: Int]) -> String {
+    public static func describeCounts(_ counts: [String: Int]) -> String {
         let forms = scopedTypes.map { ($0.label, $0.singular, $0.plural) } + otherTypes.map { ($0.label, $0.singular, $0.plural) }
         var parts = forms.compactMap { label, singular, plural -> String? in
             guard let count = counts[label], count > 0 else { return nil }
@@ -284,7 +320,7 @@ enum AuditObjects {
     // MARK: Classic API record helpers
 
     /// `{"policies": [ … ]}` → the entries, whatever the wrapper key is called.
-    static func entries(in listing: JSONValue) -> [(id: String, name: String, json: JSONValue)] {
+    public static func entries(in listing: JSONValue) -> [(id: String, name: String, json: JSONValue)] {
         guard case .object(let top) = listing,
               let array = top.lazy.compactMap({ $0.value.arrayValue }).first else { return [] }
         return array.compactMap { item in
@@ -294,13 +330,13 @@ enum AuditObjects {
     }
 
     /// `{"policy": { … }}` → the inner record.
-    static func rootObject(_ record: JSONValue) -> JSONValue? {
+    public static func rootObject(_ record: JSONValue) -> JSONValue? {
         guard case .object(let top) = record else { return nil }
         if top.count == 1, case .object = top[0].value { return top[0].value }
         return record
     }
 
-    static func isTrue(_ value: JSONValue?) -> Bool {
+    public static func isTrue(_ value: JSONValue?) -> Bool {
         switch value {
         case .bool(let b)?: return b
         case .string(let s)?: return s.lowercased() == "true"
@@ -312,7 +348,7 @@ enum AuditObjects {
     /// The entries of a Jamf list. Usually an array, but the Classic API also
     /// sends some lists (e.g. a policy's `jss_users`) wrapped in an object:
     /// `{"user": {"id": 1, "name": "x"}}`, `{"user": [...]}`, or `{}` when empty.
-    static func items(_ value: JSONValue?) -> [JSONValue] {
+    public static func items(_ value: JSONValue?) -> [JSONValue] {
         guard let value else { return [] }
         if let array = value.arrayValue { return array }
         guard case .object(let entries) = value, !entries.isEmpty else { return [] }
@@ -326,7 +362,7 @@ enum AuditObjects {
 
     /// The id inside a scope/member entry, tolerating the older wrapped shape
     /// (`{"computer_group": {"id": 1}}`).
-    static func entryID(_ entry: JSONValue) -> String? {
+    public static func entryID(_ entry: JSONValue) -> String? {
         if let id = entry["id"]?.text, !id.isEmpty { return id }
         if case .object(let fields) = entry, fields.count == 1, let id = fields[0].value["id"]?.text, !id.isEmpty {
             return id
@@ -334,7 +370,7 @@ enum AuditObjects {
         return nil
     }
 
-    static func entryName(_ entry: JSONValue) -> String {
+    public static func entryName(_ entry: JSONValue) -> String {
         if let name = entry["name"]?.text, !name.isEmpty { return name }
         if case .object(let fields) = entry, fields.count == 1 { return fields[0].value["name"]?.text ?? "" }
         return ""
@@ -344,17 +380,23 @@ enum AuditObjects {
 // MARK: - Group references and scopes
 
 /// Where a record refers to a group of one kind.
-struct GroupReference: Hashable {
-    let groupID: String?
-    let groupName: String?
-    let relationship: String
+public struct GroupReference: Hashable {
+    public let groupID: String?
+    public let groupName: String?
+    public let relationship: String
+
+    public init(groupID: String? = nil, groupName: String? = nil, relationship: String) {
+        self.groupID = groupID
+        self.groupName = groupName
+        self.relationship = relationship
+    }
 }
 
-enum ScopeReading {
+public enum ScopeReading {
     /// Every reference to a group of `kind` inside `root`: scope targets,
     /// exclusions and limitations, and smart-group / advanced-search criteria.
     /// Walks the whole record so it tolerates differences between object types.
-    static func groupReferences(in root: JSONValue, kind: GroupKind) -> [GroupReference] {
+    public static func groupReferences(in root: JSONValue, kind: GroupKind) -> [GroupReference] {
         var found: [GroupReference] = []
         func add(_ reference: GroupReference) { if !found.contains(reference) { found.append(reference) } }
 
@@ -389,7 +431,7 @@ enum ScopeReading {
 
     /// Does this reference point at the given group? Scope entries match by id;
     /// criteria (which only carry a name) match the name, ignoring case.
-    static func reference(_ reference: GroupReference, matches groupID: String, name: String) -> Bool {
+    public static func reference(_ reference: GroupReference, matches groupID: String, name: String) -> Bool {
         if let id = reference.groupID { return id == groupID }
         return reference.groupName?.caseInsensitiveCompare(name) == .orderedSame
     }
@@ -402,34 +444,53 @@ enum ScopeReading {
     }
 
     /// The parts of an object's scope that concern one kind of device.
-    struct Scope {
-        var all = false
-        var devices: Set<String> = []
-        var groups: [String: String] = [:]          // id → name
+    public struct Scope {
+        public var all = false
+        public var devices: Set<String> = []
+        public var groups: [String: String] = [:]          // id → name
         /// Other non-empty target lists (buildings, departments, users…), which audits don't evaluate.
-        var otherTargets: [String] = []
-        var excludedDevices: Set<String> = []
-        var excludedGroups: [String: String] = [:]
+        public var otherTargets: [String] = []
+        public var excludedDevices: Set<String> = []
+        public var excludedGroups: [String: String] = [:]
         /// Jamf user targets and exclusions, by lower-cased username.
-        var users: Set<String> = []
-        var excludedUsers: Set<String> = []
+        public var users: Set<String> = []
+        public var excludedUsers: Set<String> = []
         /// Building and department targets and exclusions, id → name.
-        var buildings: [String: String] = [:]
-        var departments: [String: String] = [:]
-        var excludedBuildings: [String: String] = [:]
-        var excludedDepartments: [String: String] = [:]
+        public var buildings: [String: String] = [:]
+        public var departments: [String: String] = [:]
+        public var excludedBuildings: [String: String] = [:]
+        public var excludedDepartments: [String: String] = [:]
         /// Jamf user group targets and exclusions, id → name, and "All Users".
-        var userGroups: [String: String] = [:]
-        var excludedUserGroups: [String: String] = [:]
-        var allUsers = false
+        public var userGroups: [String: String] = [:]
+        public var excludedUserGroups: [String: String] = [:]
+        public var allUsers = false
 
-        var isEmpty: Bool { !all && !allUsers && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
+        public var isEmpty: Bool { !all && !allUsers && devices.isEmpty && groups.isEmpty && otherTargets.isEmpty }
         /// True when any exclusion list is non-empty (devices, groups, users, buildings, departments, network segments…).
-        var hasAnyExclusion = false
-        var hasExclusions: Bool { hasAnyExclusion || !excludedDevices.isEmpty || !excludedGroups.isEmpty }
+        public var hasAnyExclusion = false
+        public var hasExclusions: Bool { hasAnyExclusion || !excludedDevices.isEmpty || !excludedGroups.isEmpty }
+
+        public init(all: Bool = false, devices: Set<String> = [], groups: [String: String] = [:], otherTargets: [String] = [], excludedDevices: Set<String> = [], excludedGroups: [String: String] = [:], users: Set<String> = [], excludedUsers: Set<String> = [], buildings: [String: String] = [:], departments: [String: String] = [:], excludedBuildings: [String: String] = [:], excludedDepartments: [String: String] = [:], userGroups: [String: String] = [:], excludedUserGroups: [String: String] = [:], allUsers: Bool = false, hasAnyExclusion: Bool = false) {
+            self.all = all
+            self.devices = devices
+            self.groups = groups
+            self.otherTargets = otherTargets
+            self.excludedDevices = excludedDevices
+            self.excludedGroups = excludedGroups
+            self.users = users
+            self.excludedUsers = excludedUsers
+            self.buildings = buildings
+            self.departments = departments
+            self.excludedBuildings = excludedBuildings
+            self.excludedDepartments = excludedDepartments
+            self.userGroups = userGroups
+            self.excludedUserGroups = excludedUserGroups
+            self.allUsers = allUsers
+            self.hasAnyExclusion = hasAnyExclusion
+        }
     }
 
-    static func scope(of root: JSONValue, kind: GroupKind) -> Scope {
+    public static func scope(of root: JSONValue, kind: GroupKind) -> Scope {
         var result = Scope()
         guard case .object(let entries)? = root["scope"] else { return result }
         let otherKind: GroupKind = kind == .computer ? .mobile : .computer
@@ -489,10 +550,10 @@ enum ScopeReading {
 // MARK: - Saved results
 
 /// Saved audit results, one JSON file each, in an `Audits` folder beside settings.json.
-final class AuditStore {
-    let directory: URL
+public final class AuditStore {
+    public let directory: URL
 
-    init(directory: URL) { self.directory = directory }
+    public init(directory: URL) { self.directory = directory }
 
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -509,25 +570,25 @@ final class AuditStore {
 
     private func file(for id: UUID) -> URL { directory.appendingPathComponent("\(id.uuidString).json") }
 
-    func loadAll() -> [AuditResult] {
+    public func loadAll() -> [AuditResult] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }
             .compactMap { try? Self.decoder.decode(AuditResult.self, from: Data(contentsOf: $0)) }
             .sorted { $0.runAt > $1.runAt }
     }
 
-    func save(_ result: AuditResult) throws {
+    public func save(_ result: AuditResult) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Self.encoder.encode(result).write(to: file(for: result.id), options: .atomic)
     }
 
-    func delete(_ ids: Set<UUID>) {
+    public func delete(_ ids: Set<UUID>) {
         for id in ids { try? FileManager.default.removeItem(at: file(for: id)) }
     }
 
     /// Deletes results run before `date`; returns how many were removed.
     @discardableResult
-    func deleteOlder(than date: Date) -> Int {
+    public func deleteOlder(than date: Date) -> Int {
         let old = loadAll().filter { $0.runAt < date }
         delete(Set(old.map(\.id)))
         return old.count

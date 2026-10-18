@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// Native alerts, awaited. They attach as sheets to the front window so a
 /// multi-step action can simply `await` each prompt in turn.

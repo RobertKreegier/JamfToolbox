@@ -1,14 +1,14 @@
 import Foundation
 
 /// Minimal Meraki Dashboard API (v1) client for client lookups.
-actor MerakiClient {
-    static let productionBase = "https://api.meraki.com/api/v1"
+public actor MerakiClient {
+    public static let productionBase = "https://api.meraki.com/api/v1"
 
     private let base: String
     private let apiKey: String
     private let transport: HTTPTransport
 
-    init(apiKey: String, tls: TLSPolicy, base: String = MerakiClient.productionBase) {
+    public init(apiKey: String, tls: TLSPolicy, base: String = MerakiClient.productionBase) {
         self.apiKey = apiKey
         self.base = base
         self.transport = HTTPTransport(policy: tls)
@@ -54,21 +54,21 @@ actor MerakiClient {
         }
     }
 
-    func organizations() async throws -> [JSONValue] {
+    public func organizations() async throws -> [JSONValue] {
         try await request("/organizations").arrayValue ?? []
     }
 
-    func networks(orgID: String) async throws -> [JSONValue] {
+    public func networks(orgID: String) async throws -> [JSONValue] {
         try await request("/organizations/\(URLEncoding.quote(orgID))/networks?perPage=1000").arrayValue ?? []
     }
 
     /// All Meraki hardware (APs, switches, …) in a network.
-    func devices(networkID: String) async throws -> [JSONValue] {
+    public func devices(networkID: String) async throws -> [JSONValue] {
         try await request("/networks/\(URLEncoding.quote(networkID))/devices").arrayValue ?? []
     }
 
     /// Look up a client by MAC in one network. Returns nil if not found.
-    func client(networkID: String, mac: String) async throws -> JSONValue? {
+    public func client(networkID: String, mac: String) async throws -> JSONValue? {
         do {
             return try await request("/networks/\(URLEncoding.quote(networkID))/clients/\(URLEncoding.quote(normalizeMAC(mac)))")
         } catch let error as ServiceError where error.isNotFound {
@@ -78,7 +78,7 @@ actor MerakiClient {
 
     /// Org-wide client lookup by MAC — no network needed. The payload's `records`
     /// holds one entry per network the MAC was seen on; nil if it's nowhere in the org.
-    func searchClient(orgID: String, mac: String) async throws -> JSONValue? {
+    public func searchClient(orgID: String, mac: String) async throws -> JSONValue? {
         let payload: JSONValue
         do {
             payload = try await request("/organizations/\(URLEncoding.quote(orgID))/clients/search?mac=\(URLEncoding.quote(normalizeMAC(mac)))")

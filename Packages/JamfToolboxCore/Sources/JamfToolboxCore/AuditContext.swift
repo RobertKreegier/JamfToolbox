@@ -1,95 +1,147 @@
 import Foundation
 
 /// A Jamf object an audit read, with its record (scope, criteria, payloads…).
-struct ScopedObject {
-    let type: AuditObjects.ObjectType
-    let id: String
-    let name: String
-    let root: JSONValue
+public struct ScopedObject {
+    public let type: AuditObjects.ObjectType
+    public let id: String
+    public let name: String
+    public let root: JSONValue
+
+    public init(type: AuditObjects.ObjectType, id: String, name: String, root: JSONValue) {
+        self.type = type
+        self.id = id
+        self.name = name
+        self.root = root
+    }
 }
 
 /// A group with its members.
-struct GroupRecord {
-    struct Member: Hashable {
-        let id: String
-        let name: String
-        let serial: String
-        let udid: String
-        let mac: String
+public struct GroupRecord {
+    public struct Member: Hashable {
+        public let id: String
+        public let name: String
+        public let serial: String
+        public let udid: String
+        public let mac: String
+
+        public init(id: String, name: String, serial: String, udid: String, mac: String) {
+            self.id = id
+            self.name = name
+            self.serial = serial
+            self.udid = udid
+            self.mac = mac
+        }
     }
 
-    let kind: GroupKind
-    let id: String
-    let name: String
-    let isSmart: Bool
-    let members: [Member]
+    public let kind: GroupKind
+    public let id: String
+    public let name: String
+    public let isSmart: Bool
+    public let members: [Member]
 
-    var objectType: String { kind.groupLabel(smart: isSmart) }
+    public var objectType: String { kind.groupLabel(smart: isSmart) }
+
+    public init(kind: GroupKind, id: String, name: String, isSmart: Bool, members: [Member]) {
+        self.kind = kind
+        self.id = id
+        self.name = name
+        self.isSmart = isSmart
+        self.members = members
+    }
 }
 
 /// One device from the Jamf Pro API inventory.
-struct DeviceRecord {
-    let kind: GroupKind
-    let id: String
-    let name: String
-    let serial: String
-    let username: String
-    let osVersion: String
-    let managementID: String
+public struct DeviceRecord {
+    public let kind: GroupKind
+    public let id: String
+    public let name: String
+    public let serial: String
+    public let username: String
+    public let osVersion: String
+    public let managementID: String
     /// Computers: last check-in. Mobile devices: last inventory update (they have no separate check-in).
-    let lastSeen: Date?
-    let supervised: Bool?
-    let managed: Bool?
-    let fileVaultEnabled: Bool?
-    let fileVaultState: String
+    public let lastSeen: Date?
+    public let supervised: Bool?
+    public let managed: Bool?
+    public let fileVaultEnabled: Bool?
+    public let fileVaultState: String
     /// From User and Location. The Jamf Pro API gives ids; names when it has them.
-    var buildingID = ""
-    var departmentID = ""
-    var building = ""
-    var department = ""
+    public var buildingID = ""
+    public var departmentID = ""
+    public var building = ""
+    public var department = ""
 
-    var objectType: String { kind.label }
+    public var objectType: String { kind.label }
+
+    public init(kind: GroupKind, id: String, name: String, serial: String, username: String, osVersion: String, managementID: String, lastSeen: Date? = nil, supervised: Bool? = nil, managed: Bool? = nil, fileVaultEnabled: Bool? = nil, fileVaultState: String, buildingID: String = "", departmentID: String = "", building: String = "", department: String = "") {
+        self.kind = kind
+        self.id = id
+        self.name = name
+        self.serial = serial
+        self.username = username
+        self.osVersion = osVersion
+        self.managementID = managementID
+        self.lastSeen = lastSeen
+        self.supervised = supervised
+        self.managed = managed
+        self.fileVaultEnabled = fileVaultEnabled
+        self.fileVaultState = fileVaultState
+        self.buildingID = buildingID
+        self.departmentID = departmentID
+        self.building = building
+        self.department = department
+    }
 }
 
 /// One MDM command from the Jamf Pro API.
-struct MDMCommandRecord {
-    let managementID: String
-    let clientType: String
-    let state: String
-    let commandType: String
-    let dateSent: Date?
-    let profileID: String?
-    let error: String
+public struct MDMCommandRecord {
+    public let managementID: String
+    public let clientType: String
+    public let state: String
+    public let commandType: String
+    public let dateSent: Date?
+    public let profileID: String?
+    public let error: String
+
+    public init(managementID: String, clientType: String, state: String, commandType: String, dateSent: Date? = nil, profileID: String? = nil, error: String) {
+        self.managementID = managementID
+        self.clientType = clientType
+        self.state = state
+        self.commandType = commandType
+        self.dateSent = dateSent
+        self.profileID = profileID
+        self.error = error
+    }
 }
 
 /// Everything an audit run reads from Jamf Pro, fetched at most once per run.
 /// Read-only: only GET requests are made.
-final class AuditContext {
-    let client: JamfClient
-    let progress: @MainActor (AuditProgress) -> Void
+public final class AuditContext {
+    public let client: JamfClient
+    public let progress: @MainActor (AuditProgress) -> Void
     /// Caveats collected while reading (types skipped, records unreadable…).
-    private(set) var warnings: [String] = []
+    public private(set) var warnings: [String] = []
     private let concurrency = 6
 
     private var scopedCache: [String: [ScopedObject]] = [:]
     private var groupCache: [GroupKind: [GroupRecord]] = [:]
     private var inventoryCache: [GroupKind: [DeviceRecord]] = [:]
 
-    init(client: JamfClient, progress: @escaping @MainActor (AuditProgress) -> Void) {
+    public init(client: JamfClient, progress: @escaping @MainActor (AuditProgress) -> Void) {
         self.client = client
         self.progress = progress
     }
 
-    func warn(_ message: String) { if !warnings.contains(message) { warnings.append(message) } }
+    public func warn(_ message: String) { if !warnings.contains(message) { warnings.append(message) } }
 
-    func status(_ message: String) async {
+    public func status(_ message: String) async {
         await progress(AuditProgress(done: 0, total: 0, message: message))
     }
 
     // MARK: Concurrent reads
 
     /// Reads `items` a few at a time, reporting progress. A failed read yields nil.
-    func readAll<Item>(_ items: [Item], verb: String = "Reading", name: @escaping (Item) -> String,
+    public func readAll<Item>(_ items: [Item], verb: String = "Reading", name: @escaping (Item) -> String,
                        read: @escaping (Item) async throws -> JSONValue) async throws -> [(Item, JSONValue?)] {
         var results: [(Item, JSONValue?)] = []
         var done = 0
@@ -115,7 +167,7 @@ final class AuditContext {
     }
 
     /// A classic list, or nil (with a warning) if it can't be read.
-    func list(_ type: AuditObjects.ObjectType) async throws -> [(id: String, name: String, json: JSONValue)]? {
+    public func list(_ type: AuditObjects.ObjectType) async throws -> [(id: String, name: String, json: JSONValue)]? {
         try Task.checkCancellation()
         await status("Listing \(type.plural)…")
         do {
@@ -142,7 +194,7 @@ final class AuditContext {
     // MARK: Scoped objects
 
     /// Every object of the given types, with its record. Cached per run.
-    func scopedObjects(_ types: [AuditObjects.ObjectType]) async throws -> [ScopedObject] {
+    public func scopedObjects(_ types: [AuditObjects.ObjectType]) async throws -> [ScopedObject] {
         var all: [ScopedObject] = []
         var pending: [(AuditObjects.ObjectType, String, String)] = []
         for type in types {
@@ -177,7 +229,7 @@ final class AuditContext {
     // MARK: Groups
 
     /// Every group of a kind (static and smart) with its members. Cached per run.
-    func groups(_ kind: GroupKind) async throws -> [GroupRecord] {
+    public func groups(_ kind: GroupKind) async throws -> [GroupRecord] {
         if let cached = groupCache[kind] { return cached }
         try Task.checkCancellation()
         await status("Listing \(kind.label.lowercased()) groups…")
@@ -206,7 +258,7 @@ final class AuditContext {
     }
 
     /// One group with its members (no list fetch).
-    func group(_ kind: GroupKind, id: String) async throws -> GroupRecord {
+    public func group(_ kind: GroupKind, id: String) async throws -> GroupRecord {
         if let cached = groupCache[kind]?.first(where: { $0.id == id }) { return cached }
         await status("Reading group…")
         let json = try await client.get("/JSSResource/\(kind.resource)/id/\(id)")
@@ -231,7 +283,7 @@ final class AuditContext {
     // MARK: Inventory (Jamf Pro API, paginated)
 
     /// Every device of a kind with the fields audits need. Cached per run.
-    func inventory(_ kind: GroupKind) async throws -> [DeviceRecord] {
+    public func inventory(_ kind: GroupKind) async throws -> [DeviceRecord] {
         if let cached = inventoryCache[kind] { return cached }
         let pageSize = 200
         let records: [JSONValue]
@@ -329,7 +381,7 @@ final class AuditContext {
 
     /// MDM commands in one state (e.g. "Pending", "Error"), newest first.
     /// Stops after `limit` commands and says so.
-    func mdmCommands(state: String, limit: Int = 5000) async throws -> [MDMCommandRecord] {
+    public func mdmCommands(state: String, limit: Int = 5000) async throws -> [MDMCommandRecord] {
         let pageSize = 200
         var collected: [JSONValue] = []
         // The filter's value spelling isn't pinned down by the API docs; try both.
@@ -383,7 +435,7 @@ final class AuditContext {
 
     // MARK: Device records and history (classic API)
 
-    func classicDevice(_ kind: GroupKind, id: String) async throws -> JSONValue {
+    public func classicDevice(_ kind: GroupKind, id: String) async throws -> JSONValue {
         await status("Reading the device record…")
         let json = try await client.get("/JSSResource/\(kind.deviceResource)/id/\(id)")
         guard let root = AuditObjects.rootObject(json) else { throw ServiceError("The device record couldn't be read.") }
@@ -391,14 +443,14 @@ final class AuditContext {
     }
 
     /// Which of the given Jamf user groups list `username` as a member.
-    func userGroups(containing username: String, among ids: Set<String>) async throws -> Set<String> {
+    public func userGroups(containing username: String, among ids: Set<String>) async throws -> Set<String> {
         guard !username.isEmpty else { return [] }
         return Set(try await userGroupMembers(ids).filter { $0.value.contains(username) }.keys)
     }
 
     /// The members (lower-cased usernames) of each of the given Jamf user groups.
     /// Groups that can't be read are left out, with a warning.
-    func userGroupMembers(_ ids: Set<String>) async throws -> [String: Set<String>] {
+    public func userGroupMembers(_ ids: Set<String>) async throws -> [String: Set<String>] {
         guard !ids.isEmpty else { return [:] }
         let read = try await readAll(ids.sorted(), verb: "Reading user groups", name: { "user group \($0)" }) { id in
             try await self.client.get("/JSSResource/usergroups/id/\(id)")
@@ -416,7 +468,7 @@ final class AuditContext {
 
     /// Specific device groups with their members, read a few at a time.
     /// Groups that can't be read are left out, with a warning.
-    func groups(_ kind: GroupKind, ids: Set<String>) async throws -> [String: GroupRecord] {
+    public func groups(_ kind: GroupKind, ids: Set<String>) async throws -> [String: GroupRecord] {
         guard !ids.isEmpty else { return [:] }
         if let cached = groupCache[kind] { return Dictionary(cached.filter { ids.contains($0.id) }.map { ($0.id, $0) }) { a, _ in a } }
         let read = try await readAll(ids.sorted(), verb: "Reading \(kind.label.lowercased()) groups", name: { "group \($0)" }) { id in
@@ -434,7 +486,7 @@ final class AuditContext {
     }
 
     /// Policy log entries for each computer (classic computer history).
-    func policyLogs(_ computers: [DeviceRecord]) async throws -> [(DeviceRecord, [JSONValue])] {
+    public func policyLogs(_ computers: [DeviceRecord]) async throws -> [(DeviceRecord, [JSONValue])] {
         let read = try await readAll(computers, verb: "Reading policy history", name: { $0.name }) { device in
             try await self.client.get("/JSSResource/computerhistory/id/\(device.id)/subset/PolicyLogs")
         }
@@ -450,7 +502,7 @@ final class AuditContext {
 }
 
 /// Jamf dates arrive as ISO 8601 with or without fractional seconds or a zone.
-func parseJamfDate(_ text: String) -> Date? {
+public func parseJamfDate(_ text: String) -> Date? {
     guard !text.isEmpty else { return nil }
     if let date = parseISO8601(text) { return date }
     let formatter = DateFormatter()

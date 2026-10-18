@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 struct NamedID: Identifiable, Hashable {
     let id: String

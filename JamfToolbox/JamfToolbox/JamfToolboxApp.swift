@@ -1,4 +1,5 @@
 import SwiftUI
+import JamfToolboxCore
 
 @main
 struct JamfToolboxApp: App {

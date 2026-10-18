@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// Lets a free-standing window close itself.
 @MainActor

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import JamfToolboxCore
 
 /// Opens the non-modal info windows.
 @MainActor
