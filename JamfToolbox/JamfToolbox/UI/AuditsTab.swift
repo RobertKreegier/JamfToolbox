@@ -399,7 +399,7 @@ private struct AuditResultView: View {
                 }
                 .width(min: 100, ideal: 220)
             }
-        } else if result.findings.contains(where: { $0.installed != nil }) {
+        } else if result.showsInstalled {
             Table(rows, selection: $findingSelection, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.objectName)
                     .width(min: 80, ideal: 170)
@@ -464,8 +464,7 @@ private struct AuditResultView: View {
         }
     }
 
-    /// Rows pair a profile with one device (Devices Targeted and Excluded).
-    private var pairsDevices: Bool { result.findings.contains { $0.device != nil } }
+    private var pairsDevices: Bool { result.pairsDevices }
 
     private func scopeChangeButton(_ change: ScopeChange, _ selected: [AuditFinding]) -> some View {
         let count = center.candidates(change, in: selected).count
@@ -506,26 +505,13 @@ private struct AuditResultView: View {
         }
     }
 
-    private var foundText: String {
-        if pairsDevices {
-            let devices = Set(result.findings.compactMap { $0.device?.id }).count
-            let profiles = Set(result.findings.map(\.objectID)).count
-            return "\(devices) device\(devices == 1 ? "" : "s") targeted and excluded, across \(profiles) profile\(profiles == 1 ? "" : "s")"
-        }
-        let counts = Dictionary(grouping: result.findings, by: \.objectType).mapValues(\.count)
-        let total = result.findings.count
-        let noun = result.reportID == AuditReports.groupDependenciesID ? "reference" : "finding"
-        return "\(total) \(noun)\(total == 1 ? "" : "s"): " + AuditObjects.describeCounts(counts)
-    }
+    private var foundText: String { result.foundText }
 
     /// Shown only when nothing was found (otherwise the Found line says what was).
     @ViewBuilder
     private var summary: some View {
         if result.findings.isEmpty {
-            Label(result.warnings.isEmpty
-                  ? (result.reportID == AuditReports.groupDependenciesID ? "Nothing in Jamf Pro refers to this group." : "No issues found.")
-                  : "Nothing found in what could be checked.",
-                  systemImage: "checkmark.circle.fill")
+            Label(result.emptyText, systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         }
     }
@@ -544,19 +530,13 @@ private struct AuditResultView: View {
         }
     }
 
-    /// Results whose rows carry how the device is directly scoped (a device's
-    /// Config Profiles in Scope).
-    private var offersScopeChanges: Bool { result.findings.contains { $0.directScope != nil } }
+    private var offersScopeChanges: Bool { result.offersScopeChanges }
 
     private func findings(_ ids: Set<AuditFinding.ID>) -> [AuditFinding] {
         result.findings.filter { ids.contains($0.id) }
     }
 
-    private func url(_ finding: AuditFinding) -> URL? {
-        guard !finding.objectID.isEmpty,
-              let page = AuditObjects.webPage(forObjectType: finding.objectType) ?? finding.webPage else { return nil }
-        return URL(string: "\(result.server)/\(page)?id=\(finding.objectID)&o=r")
-    }
+    private func url(_ finding: AuditFinding) -> URL? { result.webURL(for: finding) }
 
     private func canOpen(_ ids: Set<AuditFinding.ID>) -> Bool { findings(ids).contains { url($0) != nil } }
 
@@ -570,11 +550,8 @@ private struct AuditResultView: View {
 
     private func openDevices(_ ids: Set<AuditFinding.ID>) {
         var seen = Set<URL>()
-        for device in findings(ids).compactMap(\.device) {
-            let page = device.kind == .computer ? "computers.html" : "mobileDevices.html"
-            if let url = URL(string: "\(result.server)/\(page)?id=\(device.id)&o=r"), seen.insert(url).inserted {
-                NSWorkspace.shared.open(url)
-            }
+        for finding in findings(ids) {
+            if let url = result.deviceWebURL(for: finding), seen.insert(url).inserted { NSWorkspace.shared.open(url) }
         }
     }
 

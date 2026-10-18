@@ -126,7 +126,7 @@ public enum AuditReports {
                     summary: "Compares the profiles installed on one device with the profiles scoped to it: what's missing, and what's installed but no longer scoped.",
                     inputs: [.kind, .device], detailHeading: "Status", run: deviceProfiles),
         AuditReport(id: "profiles-device-targeting", category: .profiles, title: "Device's Config Profiles in Scope",
-                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user, the user's groups, or its building or department. Right-click profiles to exclude the device from them or remove a direct target.",
+                    summary: "Every configuration profile that targets, excludes or is installed on one device, and how it applies: to all devices, through a static or smart group, directly, or through the device's assigned user, the user's groups, or its building or department. From the result you can exclude the device from a profile or remove a direct target.",
                     inputs: [.kind, .device], detailHeading: "Targeting", run: deviceProfileTargeting),
 
         // Device health

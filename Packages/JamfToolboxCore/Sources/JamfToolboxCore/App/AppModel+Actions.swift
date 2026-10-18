@@ -95,16 +95,20 @@ extension AppModel {
     }
 
     /// Send a command, logging the outcome and alerting on failure.
+    /// Returns true when the command was accepted.
+    @discardableResult
     public func send(_ description: String, privilege: String? = nil, note: String? = nil,
-              work: () async throws -> String, onSuccess: (() -> Void)? = nil) async {
+                     work: () async throws -> String, onSuccess: (() -> Void)? = nil) async -> Bool {
         switch await busyScope(description, work) {
         case .success(let result):
             log.add("OK — \(description)." + (result.isEmpty ? "" : " \(result)"))
             onSuccess?()
+            return true
         case .failure(let error):
             let message = failureMessage(error, doing: description, privilege: privilege, note: note)
             log.add("FAILED — \(description): \(message.components(separatedBy: "\n").first ?? message)")
             await ui.error(message)
+            return false
         }
     }
 
@@ -187,22 +191,24 @@ extension AppModel {
     }
 
     /// One command for both directions: read the device's current Lost Mode
-    /// state, then offer the opposite.
-    public func actionToggleLostMode() async {
-        guard let client = await requireClient(), let device = await selectedDevice() else { return }
+    /// state, then offer the opposite. Returns true when an Enable command was
+    /// sent, false for Disable, nil when nothing was sent.
+    @discardableResult
+    public func actionToggleLostMode() async -> Bool? {
+        guard let client = await requireClient(), let device = await selectedDevice() else { return nil }
         guard device.type == .mobile else {
             await ui.info("Lost Mode is only available for mobile devices.")
-            return
+            return nil
         }
-        guard let (record, tags) = await loadRecord(device, client: client) else { return }
+        guard let (record, tags) = await loadRecord(device, client: client) else { return nil }
 
         switch Templates.lostModeEnabled(in: record) {
         case true?:
             log.add("Lost Mode is currently ON for \(device.name).")
-            await disableLostMode(device, client: client)
+            return await disableLostMode(device, client: client) ? false : nil
         case false?:
             log.add("Lost Mode is currently OFF for \(device.name).")
-            await enableLostMode(device, tags: tags, client: client)
+            return await enableLostMode(device, tags: tags, client: client) ? true : nil
         case nil:
             // Ask rather than guess: guessing wrong either strands a device or
             // unlocks a lost one.
@@ -211,14 +217,16 @@ extension AppModel {
                 "Jamf Pro didn't report whether Lost Mode is on for “\(device.name)”.",
                 first: "Enable Lost Mode", second: "Disable Lost Mode")
             switch choice {
-            case 0: await enableLostMode(device, tags: tags, client: client)
-            case 1: await disableLostMode(device, client: client)
-            default: log.add("Lost Mode cancelled.")
+            case 0: return await enableLostMode(device, tags: tags, client: client) ? true : nil
+            case 1: return await disableLostMode(device, client: client) ? false : nil
+            default:
+                log.add("Lost Mode cancelled.")
+                return nil
             }
         }
     }
 
-    private func enableLostMode(_ device: DeviceRef, tags: TagValues, client: JamfClient) async {
+    private func enableLostMode(_ device: DeviceRef, tags: TagValues, client: JamfClient) async -> Bool {
         let prefs = settings.prefs
         let presets = lostModePreviewPresets(tags)
         var message = presets[0].values["Message"] ?? ""   // the default preset
@@ -236,25 +244,25 @@ extension AppModel {
                          PreviewField(label: "Footnote", value: footnote)],
                 confirm: "Enable Lost Mode", presets: presets) else {
                 log.add("Enable Lost Mode cancelled.")
-                return
+                return false
             }
             message = result["Message"] ?? message
             phone = result["Phone"] ?? phone
             footnote = result["Footnote"] ?? footnote
         }
-        await send("Enable Lost Mode on \(device.name)", work: {
+        return await send("Enable Lost Mode on \(device.name)", work: {
             try await client.enableLostMode(id: device.id, message: message, phone: phone,
                                             footnote: footnote, playSound: sound)
         })
     }
 
-    private func disableLostMode(_ device: DeviceRef, client: JamfClient) async {
+    private func disableLostMode(_ device: DeviceRef, client: JamfClient) async -> Bool {
         guard await ui.confirm("Lost Mode is on for “\(device.name)”.\n\nTurn it off?",
                                     yes: "Turn Off", no: "Cancel") else {
             log.add("Disable Lost Mode cancelled.")
-            return
+            return false
         }
-        await send("Disable Lost Mode on \(device.name)", work: {
+        return await send("Disable Lost Mode on \(device.name)", work: {
             try await client.disableLostMode(id: device.id)
         })
     }

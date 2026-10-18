@@ -22,6 +22,10 @@ public final class DeviceSearch: ObservableObject {
     /// The list this field searches and adds to.
     public let type: DeviceType
 
+    /// Whether the field takes focus again after a device is chosen, so several
+    /// can be added in a row. The iPhone app turns this off to show the device.
+    public var keepsFocusAfterChoosing = true
+
     public init(type: DeviceType) { self.type = type }
 
     private static let minimumCharacters = 2
@@ -125,7 +129,7 @@ public final class DeviceSearch: ObservableObject {
         if !isInList(entry) { model.addEntries([entry], type: type) }
         model.selectAndReveal(entry.id, in: type)
         reset()
-        focus()   // stay in the field so several devices can be added in a row
+        if keepsFocusAfterChoosing { focus() }   // stay in the field so several devices can be added in a row
     }
 
     #if DEBUG

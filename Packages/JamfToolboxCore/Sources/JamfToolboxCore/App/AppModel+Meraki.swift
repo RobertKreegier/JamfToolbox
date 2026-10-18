@@ -8,7 +8,15 @@ extension AppModel {
             openSettings()
             return nil
         }
-        return MerakiClient(apiKey: key, tls: tlsPolicy)
+        return MerakiClient(apiKey: key, tls: tlsPolicy, base: merakiBase)
+    }
+
+    /// The Meraki API. Debug builds can point it at a mock server.
+    var merakiBase: String {
+        #if DEBUG
+        if let base = ProcessInfo.processInfo.environment["JAMFTOOLBOX_MERAKI_BASE"] { return base }
+        #endif
+        return MerakiClient.productionBase
     }
 
     public func actionMerakiInfo() async {
@@ -41,7 +49,7 @@ extension AppModel {
         await merakiSearch(meraki, device: device, mac: mac, orgID: orgID)
     }
 
-    private func rememberOrg(_ org: NamedID) {
+    func rememberOrg(_ org: NamedID) {
         settings.prefs.merakiOrgID = org.id
         settings.prefs.merakiOrgName = org.name
         persist()
@@ -92,7 +100,27 @@ extension AppModel {
         return apNames[networkID]?[normalizeMAC(apMAC)] ?? ""
     }
 
-    private func lastSeenSeconds(_ record: JSONValue) -> Double {
+    /// The org-wide search: the newest sighting of `mac`, the network it was
+    /// on, and how many networks have seen it. Nil when Meraki doesn't know it.
+    func merakiFind(_ meraki: MerakiClient, orgID: String,
+                    mac: String) async throws -> (record: JSONValue, network: JSONValue, count: Int)? {
+        guard let payload = try await meraki.searchClient(orgID: orgID, mac: mac) else { return nil }
+        // Newest sighting first.
+        let records = (payload["records"]?.arrayValue ?? []).sorted { lastSeenSeconds($0) > lastSeenSeconds($1) }
+        guard var record = records.first else { return nil }
+        let network = record["network"] ?? .emptyObject
+        if record["manufacturer"] == nil {
+            record = record.setting("manufacturer", to: .string(payload["manufacturer"]?.text ?? ""))
+        }
+        if (record["recentDeviceName"]?.text ?? "").isEmpty {
+            let name = await merakiAPName(meraki, networkID: network["id"]?.text ?? "",
+                                          apMAC: record["recentDeviceMac"]?.text ?? "")
+            record = record.setting("recentDeviceName", to: .string(name))
+        }
+        return (record, network, records.count)
+    }
+
+    func lastSeenSeconds(_ record: JSONValue) -> Double {
         switch record["lastSeen"] {
         case .number(let n)?: return Double(n) ?? 0
         case .string(let s)?: return parseISO8601(s)?.timeIntervalSince1970 ?? 0
@@ -104,21 +132,8 @@ extension AppModel {
     private func merakiSearch(_ meraki: MerakiClient, device: DeviceRef, mac: String, orgID: String) async {
         let orgName = settings.prefs.merakiOrgName.isEmpty ? orgID : settings.prefs.merakiOrgName
 
-        let outcome = await busyScope("Searching Meraki for \(device.name)…") { () -> (record: JSONValue, network: JSONValue, count: Int)? in
-            guard let payload = try await meraki.searchClient(orgID: orgID, mac: mac) else { return nil }
-            // Newest sighting first.
-            let records = (payload["records"]?.arrayValue ?? []).sorted { lastSeenSeconds($0) > lastSeenSeconds($1) }
-            guard var record = records.first else { return nil }
-            let network = record["network"] ?? .emptyObject
-            if record["manufacturer"] == nil {
-                record = record.setting("manufacturer", to: .string(payload["manufacturer"]?.text ?? ""))
-            }
-            if (record["recentDeviceName"]?.text ?? "").isEmpty {
-                let name = await merakiAPName(meraki, networkID: network["id"]?.text ?? "",
-                                              apMAC: record["recentDeviceMac"]?.text ?? "")
-                record = record.setting("recentDeviceName", to: .string(name))
-            }
-            return (record, network, records.count)
+        let outcome = await busyScope("Searching Meraki for \(device.name)…") {
+            try await merakiFind(meraki, orgID: orgID, mac: mac)
         }
 
         switch outcome {
