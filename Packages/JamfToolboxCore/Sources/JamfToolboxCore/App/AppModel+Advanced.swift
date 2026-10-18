@@ -1,22 +1,20 @@
-import AppKit
-import SwiftUI
-import JamfToolboxCore
+import Foundation
 
 extension AppModel {
     /// Advanced commands act on one device at a time: they are disruptive
     /// enough that each should be confirmed against a specific device.
-    func canPerform(_ command: AdvancedCommand) -> Bool {
+    public func canPerform(_ command: AdvancedCommand) -> Bool {
         showingDevices && selection.count == 1 && command.applies(to: deviceType)
     }
 
-    func perform(_ command: AdvancedCommand) {
+    public func perform(_ command: AdvancedCommand) {
         Task { await run(command) }
     }
 
     private func run(_ command: AdvancedCommand) async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard command.applies(to: device.type) else {
-            await Dialogs.info("“\(command.label)” is only available for mobile devices.")
+            await ui.info("“\(command.label)” is only available for mobile devices.")
             return
         }
         let type = device.type
@@ -24,7 +22,7 @@ extension AppModel {
 
         switch command {
         case .restart:
-            guard await Dialogs.confirm(
+            guard await ui.confirm(
                 "Restart “\(device.name)” now?\n\nThe device restarts immediately. Unsaved work on a Mac is lost.",
                 yes: "Restart", no: "Cancel") else { return log.add("Restart cancelled.") }
             await send("Restart \(device.name)", privilege: privilege, note: command.supervisionNote, work: {
@@ -32,7 +30,7 @@ extension AppModel {
             })
 
         case .shutDown:
-            guard await Dialogs.confirm(
+            guard await ui.confirm(
                 "Shut down “\(device.name)”?\n\nA device that has been shut down can't be turned back on "
                 + "remotely. Someone has to power it on by hand.", yes: "Shut Down", no: "Cancel") else {
                 return log.add("Shut down cancelled.")
@@ -47,7 +45,7 @@ extension AppModel {
             })
 
         case .clearPasscode:
-            guard await Dialogs.confirm(
+            guard await ui.confirm(
                 "Clear the passcode on “\(device.name)”?\n\nThe device stops requiring a passcode until the "
                 + "user sets a new one.", yes: "Clear Passcode", no: "Cancel") else {
                 return log.add("Clear passcode cancelled.")
@@ -57,7 +55,7 @@ extension AppModel {
             })
 
         case .clearScreenTime:
-            guard await Dialogs.confirm(
+            guard await ui.confirm(
                 "Clear the Screen Time passcode on “\(device.name)”?\n\nThe restrictions passcode is removed. "
                 + "This only works on supervised devices.", yes: "Clear Passcode", no: "Cancel") else {
                 return log.add("Clear Screen Time passcode cancelled.")
@@ -91,14 +89,14 @@ extension AppModel {
         }
         let typed = result["Type the device name to confirm"] ?? ""
         guard typed.caseInsensitiveCompare(device.name) == .orderedSame else {
-            await Dialogs.warning("The name you typed doesn't match “\(device.name)”. Nothing was sent.")
+            await ui.warning("The name you typed doesn't match “\(device.name)”. Nothing was sent.")
             return log.add("Wipe cancelled: confirmation name didn't match.")
         }
         var pin = ""
         if isComputer {
             pin = result["6-digit PIN"] ?? ""
             guard pin.count == 6, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
-                await Dialogs.warning("The PIN must be exactly 6 digits.")
+                await ui.warning("The PIN must be exactly 6 digits.")
                 return
             }
             log.add("Wipe PIN for \(device.name): \(pin)  (save this!)")
@@ -111,7 +109,7 @@ extension AppModel {
 
     private func deleteRecord(_ device: DeviceRef, client: JamfClient, privilege: String) async {
         // Cancel is the first (default) button: this one should never fire on a reflexive Return.
-        let choice = await Dialogs.show(
+        let choice = await ui.show(
             "Delete “\(device.name)” from Jamf Pro?\n\n"
             + "Wipe the device first. Once its record is gone, Jamf Pro can no longer send it commands, "
             + "so a device that hasn't been wiped keeps its data and can't be wiped remotely.\n\n"

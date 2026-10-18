@@ -1,24 +1,27 @@
-import AppKit
 import Combine
-import SwiftUI
-import UniformTypeIdentifiers
-import JamfToolboxCore
+import Foundation
 
 /// A device the user has picked, resolved from the working list.
-struct DeviceRef: Hashable {
-    let id: String
-    let name: String
-    let type: DeviceType
+public struct DeviceRef: Hashable {
+    public let id: String
+    public let name: String
+    public let type: DeviceType
+
+    public init(id: String, name: String, type: DeviceType) {
+        self.id = id
+        self.name = name
+        self.type = type
+    }
 }
 
-/// The main window's tabs.
-enum MainTab: Hashable {
+/// The main window's tabs (the iOS app's views).
+public enum MainTab: Hashable {
     case computers
     case mobile
     case audits
 
     /// The device list this tab shows, or nil for non-device tabs.
-    var deviceType: DeviceType? {
+    public var deviceType: DeviceType? {
         switch self {
         case .computers: return .computer
         case .mobile: return .mobile
@@ -27,33 +30,40 @@ enum MainTab: Hashable {
     }
 }
 
-struct SortState: Equatable {
-    var field: ColumnField
-    var ascending: Bool
+public struct SortState: Equatable {
+    public var field: ColumnField
+    public var ascending: Bool
+
+    public init(field: ColumnField, ascending: Bool) {
+        self.field = field
+        self.ascending = ascending
+    }
 }
 
 /// Asks the table to scroll a row into view (after a manual move, say).
-struct RevealRequest: Equatable {
-    let id: String
-    let token = UUID()
+public struct RevealRequest: Equatable {
+    public let id: String
+    public let token = UUID()
+
+    public init(id: String) { self.id = id }
 }
 
 /// The app's single source of truth: settings, working lists, selection and
 /// every user-facing action. Split across files by concern; this file holds
-/// state, list management, columns, copying and export.
+/// state, list management, columns and copying. Prompts and windows go through
+/// `ui`, which each app implements.
 @MainActor
-final class AppModel: ObservableObject {
-    static let shared = AppModel()
-
-    let settings: SettingsStore
-    let log = ActivityLog()
+public final class AppModel: ObservableObject {
+    public let settings: SettingsStore
+    public let log = ActivityLog()
+    public let ui: AppPresenter
     /// One search field per device tab.
-    let searches: [DeviceType: DeviceSearch] = [
+    public let searches: [DeviceType: DeviceSearch] = [
         .computer: DeviceSearch(type: .computer),
         .mobile: DeviceSearch(type: .mobile),
     ]
 
-    @Published var tab: MainTab = .computers {
+    @Published public var tab: MainTab = .computers {
         didSet {
             guard oldValue != tab else { return }
             if let type = tab.deviceType { lastDeviceType = type }
@@ -72,50 +82,49 @@ final class AppModel: ObservableObject {
 
     /// The device type of the visible tab (or the last device tab shown, when
     /// the Audits tab is up). Menus, the toolbar and every action act on this list.
-    var deviceType: DeviceType {
+    public var deviceType: DeviceType {
         get { tab.deviceType ?? lastDeviceType }
         set { tab = newValue == .mobile ? .mobile : .computers }
     }
 
     /// False on the Audits tab, where device commands are disabled.
-    var showingDevices: Bool { tab.deviceType != nil }
+    public var showingDevices: Bool { tab.deviceType != nil }
 
-    let audits: AuditCenter
+    public let audits: AuditCenter
 
-    func selection(for type: DeviceType) -> Set<String> { selections[type] ?? [] }
+    public func selection(for type: DeviceType) -> Set<String> { selections[type] ?? [] }
 
-    func setSelection(_ ids: Set<String>, for type: DeviceType) {
+    public func setSelection(_ ids: Set<String>, for type: DeviceType) {
         if selection(for: type) != ids { selections[type] = ids }
     }
 
-    func sort(for type: DeviceType) -> SortState? { sorts[type] }
-    func reveal(for type: DeviceType) -> RevealRequest? { reveals[type] }
-    func search(for type: DeviceType) -> DeviceSearch { searches[type]! }
+    public func sort(for type: DeviceType) -> SortState? { sorts[type] }
+    public func reveal(for type: DeviceType) -> RevealRequest? { reveals[type] }
+    public func search(for type: DeviceType) -> DeviceSearch { searches[type]! }
 
     /// Shorthands for the visible tab.
-    var selection: Set<String> {
+    public var selection: Set<String> {
         get { selection(for: deviceType) }
         set { setSelection(newValue, for: deviceType) }
     }
-    var sort: SortState? { sorts[deviceType] }
-    var search: DeviceSearch { search(for: deviceType) }
+    public var sort: SortState? { sorts[deviceType] }
+    public var search: DeviceSearch { search(for: deviceType) }
 
-    private(set) var client: JamfClient?
+    public private(set) var client: JamfClient?
     var apNames: [String: [String: String]] = [:]   // Meraki network id → AP MAC → name
     private var settingsObserver: AnyCancellable?
     private var didStart = false
 
-    static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-    }
-    var version: String { Self.version }
+    public static var version: String { AppInfo.version }
+    public var version: String { Self.version }
 
-    /// Off for previews, which shouldn't pop open a Settings window.
-    var opensSettingsWhenUnconfigured = true
+    /// Off for previews, which shouldn't pop open Settings.
+    public var opensSettingsWhenUnconfigured = true
 
-    init(settings: SettingsStore? = nil) {
+    public init(settings: SettingsStore? = nil, presenter: AppPresenter) {
         let settings = settings ?? SettingsStore()
         self.settings = settings
+        ui = presenter
         audits = AuditCenter(store: AuditStore(directory: settings.directory.appendingPathComponent("Audits", isDirectory: true)))
         // Views observe the model; forward settings changes so they refresh.
         settingsObserver = settings.objectWillChange.sink { [weak self] _ in
@@ -127,13 +136,13 @@ final class AppModel: ObservableObject {
     }
 
     /// Called once when the main window first appears.
-    func start() {
+    public func start() {
         guard !didStart else { return }
         didStart = true
         let hasURL = !settings.prefs.jamfURL.isEmpty
-        log.add("Welcome to \(Dialogs.appName) \(version). "
+        log.add("Welcome to \(AppInfo.name) \(version). "
                 + (hasURL ? "Type in the search field to find devices and build your list."
-                          : "Open Settings (⌘,) to connect to Jamf Pro."))
+                          : "\(ui.openSettingsHint) to connect to Jamf Pro."))
         if !hasURL && opensSettingsWhenUnconfigured {
             Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -144,11 +153,11 @@ final class AppModel: ObservableObject {
 
     // MARK: Settings & client
 
-    var tlsPolicy: TLSPolicy {
+    public var tlsPolicy: TLSPolicy {
         TLSPolicy(verify: settings.prefs.sslVerify, caBundlePath: settings.prefs.sslCABundle)
     }
 
-    func rebuildClient() {
+    public func rebuildClient() {
         let prefs = settings.prefs
         guard !prefs.jamfURL.isEmpty else { client = nil; return }
         let (a, b) = settings.credentials(for: prefs.authMethod)
@@ -156,20 +165,14 @@ final class AppModel: ObservableObject {
                             credentialA: a, credentialB: b, tls: tlsPolicy)
     }
 
-    func settingsSaved() {
+    public func settingsSaved() {
         rebuildClient()
         log.add("Settings saved.")
     }
 
-    /// Settings live in our own window rather than a SwiftUI `Settings` scene:
-    /// newer macOS versions only open that scene from a `SettingsLink`, which
-    /// can't be used from model code (first launch, "add credentials first" prompts).
-    func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        SettingsWindow.show(model: self)
-    }
+    public func openSettings() { ui.openSettings() }
 
-    func persist() {
+    public func persist() {
         if !settings.save() {
             log.add("Could not save settings: \(settings.lastSaveError ?? "unknown error")")
         }
@@ -177,14 +180,14 @@ final class AppModel: ObservableObject {
 
     // MARK: Helpers shared by the action files
 
-    func describe(_ error: Error) -> String {
+    public func describe(_ error: Error) -> String {
         if let service = error as? ServiceError { return service.message }
         if error is CancellationError { return "Cancelled." }
         return "Unexpected error: \(error.localizedDescription)"
     }
 
     /// Runs `work` with the busy indicator showing, returning its outcome.
-    func busyScope<T>(_ message: String, _ work: () async throws -> T) async -> Result<T, Error> {
+    public func busyScope<T>(_ message: String, _ work: () async throws -> T) async -> Result<T, Error> {
         log.beginBusy(message)
         defer { log.endBusy() }
         do { return .success(try await work()) } catch { return .failure(error) }
@@ -192,34 +195,34 @@ final class AppModel: ObservableObject {
 
     /// A short pause so a dismissed sheet has finished leaving before the
     /// next one is shown.
-    func sheetSettle() async {
+    public func sheetSettle() async {
         try? await Task.sleep(nanoseconds: 150_000_000)
     }
 
-    func requireClient() async -> JamfClient? {
+    public func requireClient() async -> JamfClient? {
         if let client { return client }
-        await Dialogs.info("Add your Jamf Pro URL and credentials in Settings first.")
+        await ui.info("Add your Jamf Pro URL and credentials in Settings first.")
         openSettings()
         return nil
     }
 
     // MARK: Working lists
 
-    func entries(for type: DeviceType) -> [DeviceEntry] { settings.prefs.deviceList(for: type) }
-    var entries: [DeviceEntry] { entries(for: deviceType) }
-    var visibleColumns: [ColumnField] { settings.prefs.visibleColumns }
+    public func entries(for type: DeviceType) -> [DeviceEntry] { settings.prefs.deviceList(for: type) }
+    public var entries: [DeviceEntry] { entries(for: deviceType) }
+    public var visibleColumns: [ColumnField] { settings.prefs.visibleColumns }
 
     /// Selected entries, in list order.
-    var selectedEntries: [DeviceEntry] { entries.filter { selection.contains($0.id) } }
+    public var selectedEntries: [DeviceEntry] { entries.filter { selection.contains($0.id) } }
 
-    func mutateList(_ type: DeviceType, _ body: (inout [DeviceEntry]) -> Void) {
+    public func mutateList(_ type: DeviceType, _ body: (inout [DeviceEntry]) -> Void) {
         var list = settings.prefs.deviceList(for: type)
         body(&list)
         settings.prefs.setDeviceList(list, for: type)
         persist()
     }
 
-    func updateListEntry(type: DeviceType, id: String, fields: [String: String]) {
+    public func updateListEntry(type: DeviceType, id: String, fields: [String: String]) {
         mutateList(type) { list in
             guard let index = list.firstIndex(where: { $0.id == id }) else { return }
             list[index].fields.merge(fields) { $1 }
@@ -227,7 +230,7 @@ final class AppModel: ObservableObject {
     }
 
     /// ⌘N and the + button: jump to the search field.
-    func openAddDialog() {
+    public func openAddDialog() {
         guard showingDevices else {
             tab = lastDeviceType == .mobile ? .mobile : .computers
             DispatchQueue.main.async { self.search.focus() }   // after the tab's field exists
@@ -236,12 +239,12 @@ final class AppModel: ObservableObject {
         search.focus()
     }
 
-    func selectAndReveal(_ id: String, in type: DeviceType) {
+    public func selectAndReveal(_ id: String, in type: DeviceType) {
         setSelection([id], for: type)
         reveals[type] = RevealRequest(id: id)
     }
 
-    func addEntries(_ new: [DeviceEntry], type: DeviceType) {
+    public func addEntries(_ new: [DeviceEntry], type: DeviceType) {
         mutateList(type) { list in
             for var entry in new where !list.contains(where: { $0.id == entry.id }) {
                 for field in ColumnField.allCases where entry.fields[field.rawValue] == nil {
@@ -256,7 +259,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Fetch full records for the given ids and fill in every list field.
-    func fetchEntryDetails(type: DeviceType, ids: [String]) async {
+    public func fetchEntryDetails(type: DeviceType, ids: [String]) async {
         guard let client else { return }
         var updated: [DeviceEntry] = []
         var missing = 0
@@ -275,20 +278,26 @@ final class AppModel: ObservableObject {
         if missing > 0 { log.add("\(missing) device(s) not found while fetching details.") }
     }
 
-    func removeSelected() async {
+    public func removeSelected() async {
         let chosen = selectedEntries
         guard !chosen.isEmpty else {
-            await Dialogs.info("Select one or more devices to remove from the list.")
+            await ui.info("Select one or more devices to remove from the list.")
             return
         }
-        let ids = Set(chosen.map(\.id))
-        mutateList(deviceType) { $0.removeAll { ids.contains($0.id) } }
-        selection = []
+        remove(Set(chosen.map(\.id)), from: deviceType)
+    }
+
+    /// Take devices off a working list (nothing changes in Jamf Pro).
+    public func remove(_ ids: Set<String>, from type: DeviceType) {
+        let chosen = entries(for: type).filter { ids.contains($0.id) }
+        guard !chosen.isEmpty else { return }
+        mutateList(type) { $0.removeAll { ids.contains($0.id) } }
+        setSelection(selection(for: type).subtracting(ids), for: type)
         log.add("Removed from list: " + chosen.map(\.displayName).joined(separator: ", "))
     }
 
     /// Re-fetch every field for every device in the current list.
-    func refreshList() async {
+    public func refreshList() async {
         guard let client = await requireClient() else { return }
         let type = deviceType
         let snapshot = settings.prefs.deviceList(for: type)
@@ -315,7 +324,7 @@ final class AppModel: ObservableObject {
         log.endBusy()
         if let failure {
             log.add("Refresh failed: \(failure)")
-            await Dialogs.error(failure)
+            await ui.error(failure)
             return
         }
         // Merge into the *current* list so devices added during the refresh survive.
@@ -334,7 +343,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Move the selected row(s) up (-1) or down (+1) in the saved order.
-    func moveSelected(_ direction: Int) {
+    public func moveSelected(_ direction: Int) {
         let chosen = selection
         guard !chosen.isEmpty else { return }
         var list = entries
@@ -353,7 +362,7 @@ final class AppModel: ObservableObject {
 
     /// Sort a list by a column (the visible one unless `type` is given).
     /// The new order is saved, like manual moves.
-    func sortBy(_ field: ColumnField, ascending: Bool, type: DeviceType? = nil) {
+    public func sortBy(_ field: ColumnField, ascending: Bool, type: DeviceType? = nil) {
         let type = type ?? deviceType
         var list = entries(for: type)
         guard !list.isEmpty else { return }
@@ -385,7 +394,7 @@ final class AppModel: ObservableObject {
 
     // MARK: Columns
 
-    func setColumns(_ columns: [ColumnField]) {
+    public func setColumns(_ columns: [ColumnField]) {
         let valid = columns.isEmpty ? ColumnField.defaults : columns
         guard valid.map(\.rawValue) != settings.prefs.listColumns else { return }
         settings.prefs.listColumns = valid.map(\.rawValue)
@@ -393,12 +402,12 @@ final class AppModel: ObservableObject {
         persist()
     }
 
-    func resetColumns() {
+    public func resetColumns() {
         setColumns(ColumnField.defaults)
         log.add("Columns reset to defaults.")
     }
 
-    func toggleColumn(_ field: ColumnField) {
+    public func toggleColumn(_ field: ColumnField) {
         var columns = visibleColumns
         if let index = columns.firstIndex(of: field) {
             guard columns.count > 1 else {
@@ -412,20 +421,10 @@ final class AppModel: ObservableObject {
         setColumns(columns)
     }
 
-    func showArrangeColumns() {
-        Task {
-            let result: [ColumnField]? = await Sheets.present(resizable: true) { done in
-                ColumnsSheet(shown: visibleColumns, done: done)
-            }
-            if let result { setColumns(result) }
-        }
-    }
-
     // MARK: Copying
 
-    func copyText(_ text: String, what: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+    public func copyText(_ text: String, what: String) {
+        ui.copyToClipboard(text)
         // Count lines via `components`: "\r\n" (as in CSV) is a single Character in
         // Swift, so `contains("\n")` / `split(separator: "\n")` would miss it.
         let lines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
@@ -434,7 +433,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Selected row(s) as tab-separated text (⌘C).
-    func copyRows() {
+    public func copyRows() {
         let chosen = selectedEntries
         guard !chosen.isEmpty else { return }
         let columns = visibleColumns
@@ -443,14 +442,14 @@ final class AppModel: ObservableObject {
         copyText(text, what: chosen.count == 1 ? "row" : "rows")
     }
 
-    func copyRowsAsCSV() {
+    public func copyRowsAsCSV() {
         let chosen = selectedEntries
         guard !chosen.isEmpty else { return }
         copyText(ListExport.csv(entries: chosen, columns: visibleColumns),
                  what: chosen.count == 1 ? "row as CSV" : "\(chosen.count) rows as CSV")
     }
 
-    func copyListAsCSV() {
+    public func copyListAsCSV() {
         let all = entries
         guard !all.isEmpty else {
             log.status = "The list is empty — nothing to copy."
@@ -459,52 +458,17 @@ final class AppModel: ObservableObject {
         copyText(ListExport.csv(entries: all, columns: visibleColumns), what: "list as CSV (\(all.count) rows)")
     }
 
-    func copyLog() {
+    public func copyLog() {
         guard !log.lines.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(log.text, forType: .string)
+        ui.copyToClipboard(log.text)
         log.status = "Copied log (\(log.lines.count) lines)."
     }
 
     // MARK: Export
 
-    func exportList() async {
-        let all = entries
-        guard !all.isEmpty else {
-            await Dialogs.info("The list is empty — nothing to export.")
-            return
-        }
-        let type = deviceType
-        let columns = visibleColumns
-        let panel = NSSavePanel()
-        panel.title = "Export list"
-        panel.canCreateDirectories = true
-        let baseName = "Jamf \(type.exportName) \(Self.dayStamp())"
-        let accessory = ExportFormatAccessory(panel: panel, baseName: baseName)
-        panel.accessoryView = accessory.view
-
-        let response: NSApplication.ModalResponse
-        if let window = Dialogs.anchor {
-            response = await panel.beginSheetModal(for: window)
-        } else {
-            response = panel.runModal()
-        }
-        guard response == .OK, let url = panel.url else { return }
-
-        do {
-            if url.pathExtension.lowercased() == "xlsx" {
-                try ListExport.xlsxData(entries: all, columns: columns).write(to: url, options: .atomic)
-            } else {
-                try ListExport.csvFileData(entries: all, columns: columns).write(to: url, options: .atomic)
-            }
-        } catch {
-            await Dialogs.error("Could not export the list:\n\(error.localizedDescription)")
-            return
-        }
-        log.add("Exported \(all.count) \(type.exportName.lowercased()) to \(url.lastPathComponent).")
-        if await Dialogs.confirm("Export complete. Reveal the file in Finder?", yes: "Reveal", no: "Done") {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }
+    /// The file name an exported list is offered under, without extension.
+    public func exportBaseName(_ type: DeviceType) -> String {
+        "Jamf \(type.exportName) \(Self.dayStamp())"
     }
 
     private static func dayStamp() -> String {
@@ -512,42 +476,5 @@ final class AppModel: ObservableObject {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
-    }
-}
-
-/// A "Format" pop-up for the save panel, switching between CSV and Excel.
-@MainActor
-final class ExportFormatAccessory: NSObject {
-    let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 36))
-    private let popup = NSPopUpButton(frame: NSRect(x: 80, y: 4, width: 200, height: 26), pullsDown: false)
-    private weak var panel: NSSavePanel?
-    private let baseName: String
-    private let formats: [(title: String, ext: String, type: UTType)] = [
-        ("CSV file", "csv", .commaSeparatedText),
-        ("Excel workbook", "xlsx", UTType(filenameExtension: "xlsx") ?? .data),
-    ]
-
-    init(panel: NSSavePanel, baseName: String) {
-        self.panel = panel
-        self.baseName = baseName
-        super.init()
-        let label = NSTextField(labelWithString: "Format:")
-        label.frame = NSRect(x: 20, y: 9, width: 56, height: 17)
-        label.alignment = .right
-        view.addSubview(label)
-        popup.addItems(withTitles: formats.map(\.title))
-        popup.target = self
-        popup.action = #selector(formatChanged)
-        view.addSubview(popup)
-        apply()
-    }
-
-    @objc private func formatChanged() { apply() }
-
-    private func apply() {
-        guard let panel else { return }
-        let format = formats[max(0, popup.indexOfSelectedItem)]
-        panel.allowedContentTypes = [format.type]
-        panel.nameFieldStringValue = "\(baseName).\(format.ext)"
     }
 }

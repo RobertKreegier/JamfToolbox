@@ -3,20 +3,6 @@ import JamfToolboxCore
 
 // MARK: - Preview / edit before sending
 
-struct PreviewField: Identifiable {
-    let id = UUID()
-    let label: String
-    var value: String
-    var multiline = false
-}
-
-/// A named set of field values the user can switch to (a saved message preset).
-struct PreviewPreset {
-    let name: String
-    /// Field label → value, already rendered for the device.
-    let values: [String: String]
-}
-
 /// Shows the rendered template (message, name, PIN…) for review and editing
 /// before anything is sent. Returns the trimmed values keyed by field label,
 /// or nil when cancelled. When presets are given, a picker at the top swaps
@@ -182,26 +168,6 @@ struct BulkConfirmSheet: View {
 }
 
 // MARK: - Progress
-
-@MainActor
-final class BulkProgress: ObservableObject {
-    let total: Int
-    @Published private(set) var index = 0
-    @Published private(set) var text = "Starting…"
-    @Published private(set) var cancelled = false
-
-    init(total: Int) { self.total = total }
-
-    func step(_ index: Int, _ text: String) {
-        self.index = index
-        self.text = text
-    }
-
-    func cancel() {
-        cancelled = true
-        text = "Finishing the current device, then stopping…"
-    }
-}
 
 /// Progress for a bulk operation. The work runs in an async loop; this sheet
 /// only displays it and lets the user ask it to stop between devices.

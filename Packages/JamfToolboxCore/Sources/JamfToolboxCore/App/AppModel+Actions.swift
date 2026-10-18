@@ -1,11 +1,9 @@
-import AppKit
-import SwiftUI
-import JamfToolboxCore
+import Foundation
 
 extension AppModel {
     // MARK: Dispatch
 
-    func canPerform(_ action: DeviceAction) -> Bool {
+    public func canPerform(_ action: DeviceAction) -> Bool {
         guard showingDevices, action.isAvailable(for: deviceType) else { return false }
         if selection.count > 1 { return action.supportsBulk }
         return true
@@ -13,17 +11,17 @@ extension AppModel {
 
     /// Menu / context-menu entry point: one device runs the action, several
     /// run its bulk form.
-    func perform(_ action: DeviceAction) {
+    public func perform(_ action: DeviceAction) {
         let bulk = selection.count > 1 && action.supportsBulk
         Task { await run(action, bulk: bulk) }
     }
 
     /// Double-click always targets the clicked row, so it runs the single-device form.
-    func performDoubleClickAction() {
+    public func performDoubleClickAction() {
         Task { await run(settings.prefs.doubleClickAction, bulk: false) }
     }
 
-    private func run(_ action: DeviceAction, bulk: Bool) async {
+    func run(_ action: DeviceAction, bulk: Bool) async {
         switch action {
         case .showInfo: await actionShowInfo()
         case .networkInfo: await actionMerakiInfo()
@@ -42,24 +40,24 @@ extension AppModel {
 
     // MARK: Selection helpers
 
-    func selectedDevice() async -> DeviceRef? {
+    public func selectedDevice() async -> DeviceRef? {
         let chosen = selectedEntries
         if chosen.isEmpty {
-            await Dialogs.info("Select a device in the list first.")
+            await ui.info("Select a device in the list first.")
             return nil
         }
         if chosen.count > 1 {
-            await Dialogs.info("Select a single device for this action.")
+            await ui.info("Select a single device for this action.")
             return nil
         }
         return DeviceRef(id: chosen[0].id, name: chosen[0].value(.name).isEmpty ? chosen[0].id : chosen[0].value(.name),
                          type: deviceType)
     }
 
-    func selectedDevices() async -> [DeviceRef] {
+    public func selectedDevices() async -> [DeviceRef] {
         let chosen = selectedEntries
         if chosen.isEmpty {
-            await Dialogs.info("Select one or more devices in the list first.")
+            await ui.info("Select one or more devices in the list first.")
             return []
         }
         return chosen.map {
@@ -68,21 +66,21 @@ extension AppModel {
     }
 
     /// Fetch the full record (for tags), reporting any failure to the user.
-    func loadRecord(_ device: DeviceRef, client: JamfClient) async -> (record: JSONValue, tags: TagValues)? {
+    public func loadRecord(_ device: DeviceRef, client: JamfClient) async -> (record: JSONValue, tags: TagValues)? {
         switch await busyScope("Fetching \(device.name)…", { try await client.record(for: device.type, id: device.id) }) {
         case .success(let record):
             return (record, Templates.buildTagValues(record: record, type: device.type, deviceID: device.id))
         case .failure(let error):
             let message = describe(error)
             log.add("Could not load device record: \(message)")
-            await Dialogs.error(message)
+            await ui.error(message)
             return nil
         }
     }
 
     /// Message for a failed command. A missing privilege gets a specific
     /// explanation (and, when known, the privilege to ask for) instead of a bare 403.
-    func failureMessage(_ error: Error, doing description: String, privilege: String? = nil,
+    public func failureMessage(_ error: Error, doing description: String, privilege: String? = nil,
                         note: String? = nil) -> String {
         var message = describe(error)
         if let service = error as? ServiceError, service.isPermissionDenied {
@@ -97,30 +95,32 @@ extension AppModel {
     }
 
     /// Send a command, logging the outcome and alerting on failure.
-    func send(_ description: String, privilege: String? = nil, note: String? = nil,
-              work: () async throws -> String, onSuccess: (() -> Void)? = nil) async {
+    /// Returns true when the command was accepted.
+    @discardableResult
+    public func send(_ description: String, privilege: String? = nil, note: String? = nil,
+                     work: () async throws -> String, onSuccess: (() -> Void)? = nil) async -> Bool {
         switch await busyScope(description, work) {
         case .success(let result):
             log.add("OK — \(description)." + (result.isEmpty ? "" : " \(result)"))
             onSuccess?()
+            return true
         case .failure(let error):
             let message = failureMessage(error, doing: description, privilege: privilege, note: note)
             log.add("FAILED — \(description): \(message.components(separatedBy: "\n").first ?? message)")
-            await Dialogs.error(message)
+            await ui.error(message)
+            return false
         }
     }
 
     /// Ask the user to review/edit values; returns trimmed values keyed by label.
-    func askPreview(title: String, intro: String, fields: [PreviewField], confirm: String,
+    public func askPreview(title: String, intro: String, fields: [PreviewField], confirm: String,
                     presets: [PreviewPreset] = [], presetLabel: String = "Preset") async -> [String: String]? {
-        await Sheets.present { done in
-            PreviewSheet(title: title, intro: intro, confirmLabel: confirm, fields: fields,
-                         presets: presets, presetLabel: presetLabel, done: done)
-        }
+        await ui.preview(title: title, intro: intro, fields: fields, confirm: confirm,
+                         presets: presets, presetLabel: presetLabel)
     }
 
     /// Saved Lost Mode presets rendered for one device, for the preview's picker.
-    func lostModePreviewPresets(_ tags: TagValues) -> [PreviewPreset] {
+    public func lostModePreviewPresets(_ tags: TagValues) -> [PreviewPreset] {
         settings.prefs.lostModePresets.map { preset in
             PreviewPreset(name: preset.name, values: ["Message": Templates.render(preset.message, tags),
                                                       "Phone": Templates.render(preset.phone, tags),
@@ -129,7 +129,7 @@ extension AppModel {
     }
 
     /// Saved lock messages rendered for one device (or left as templates when `tags` is nil).
-    func lockPreviewPresets(_ tags: TagValues?) -> [PreviewPreset] {
+    public func lockPreviewPresets(_ tags: TagValues?) -> [PreviewPreset] {
         settings.prefs.lockPresets.map { preset in
             PreviewPreset(name: preset.name,
                           values: ["Lock message": tags.map { Templates.render(preset.message, $0) } ?? preset.message])
@@ -138,25 +138,25 @@ extension AppModel {
 
     // MARK: Single-device actions
 
-    func actionShowInfo() async {
+    public func actionShowInfo() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let (record, _) = await loadRecord(device, client: client) else { return }
         let noun = device.type == .computer ? "Computer" : "Mobile device"
-        InfoWindows.showRecord(title: "\(device.name) — \(noun) info (ID \(device.id))", record: record)
+        ui.showRecord(title: "\(device.name) — \(noun) info (ID \(device.id))", record: record)
         log.add("Showing device info for \(device.name).")
     }
 
-    func actionOpenInJamf() async {
+    public func actionOpenInJamf() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let url = client.deviceWebURL(type: device.type, id: device.id) else {
-            await Dialogs.error("Could not build the Jamf Pro URL. Check the server URL in Settings.")
+            await ui.error("Could not build the Jamf Pro URL. Check the server URL in Settings.")
             return
         }
-        NSWorkspace.shared.open(url)
+        ui.openURL(url)
         log.add("Opened \(device.name) in your browser.")
     }
 
-    func actionRename() async {
+    public func actionRename() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let (_, tags) = await loadRecord(device, client: client) else { return }
 
@@ -177,7 +177,7 @@ extension AppModel {
             newName = result["New name"] ?? ""
         }
         guard !newName.isEmpty else {
-            await Dialogs.warning("The new name is empty — check the name format in Settings > Templates.")
+            await ui.warning("The new name is empty — check the name format in Settings > Templates.")
             return
         }
         await send("Rename \(device.name) → \(newName)", work: {
@@ -191,38 +191,42 @@ extension AppModel {
     }
 
     /// One command for both directions: read the device's current Lost Mode
-    /// state, then offer the opposite.
-    func actionToggleLostMode() async {
-        guard let client = await requireClient(), let device = await selectedDevice() else { return }
+    /// state, then offer the opposite. Returns true when an Enable command was
+    /// sent, false for Disable, nil when nothing was sent.
+    @discardableResult
+    public func actionToggleLostMode() async -> Bool? {
+        guard let client = await requireClient(), let device = await selectedDevice() else { return nil }
         guard device.type == .mobile else {
-            await Dialogs.info("Lost Mode is only available for mobile devices.")
-            return
+            await ui.info("Lost Mode is only available for mobile devices.")
+            return nil
         }
-        guard let (record, tags) = await loadRecord(device, client: client) else { return }
+        guard let (record, tags) = await loadRecord(device, client: client) else { return nil }
 
         switch Templates.lostModeEnabled(in: record) {
         case true?:
             log.add("Lost Mode is currently ON for \(device.name).")
-            await disableLostMode(device, client: client)
+            return await disableLostMode(device, client: client) ? false : nil
         case false?:
             log.add("Lost Mode is currently OFF for \(device.name).")
-            await enableLostMode(device, tags: tags, client: client)
+            return await enableLostMode(device, tags: tags, client: client) ? true : nil
         case nil:
             // Ask rather than guess: guessing wrong either strands a device or
             // unlocks a lost one.
             log.add("Jamf Pro did not report a Lost Mode state for \(device.name).")
-            let choice = await Dialogs.choose(
+            let choice = await ui.choose(
                 "Jamf Pro didn't report whether Lost Mode is on for “\(device.name)”.",
                 first: "Enable Lost Mode", second: "Disable Lost Mode")
             switch choice {
-            case 0: await enableLostMode(device, tags: tags, client: client)
-            case 1: await disableLostMode(device, client: client)
-            default: log.add("Lost Mode cancelled.")
+            case 0: return await enableLostMode(device, tags: tags, client: client) ? true : nil
+            case 1: return await disableLostMode(device, client: client) ? false : nil
+            default:
+                log.add("Lost Mode cancelled.")
+                return nil
             }
         }
     }
 
-    private func enableLostMode(_ device: DeviceRef, tags: TagValues, client: JamfClient) async {
+    private func enableLostMode(_ device: DeviceRef, tags: TagValues, client: JamfClient) async -> Bool {
         let prefs = settings.prefs
         let presets = lostModePreviewPresets(tags)
         var message = presets[0].values["Message"] ?? ""   // the default preset
@@ -240,30 +244,30 @@ extension AppModel {
                          PreviewField(label: "Footnote", value: footnote)],
                 confirm: "Enable Lost Mode", presets: presets) else {
                 log.add("Enable Lost Mode cancelled.")
-                return
+                return false
             }
             message = result["Message"] ?? message
             phone = result["Phone"] ?? phone
             footnote = result["Footnote"] ?? footnote
         }
-        await send("Enable Lost Mode on \(device.name)", work: {
+        return await send("Enable Lost Mode on \(device.name)", work: {
             try await client.enableLostMode(id: device.id, message: message, phone: phone,
                                             footnote: footnote, playSound: sound)
         })
     }
 
-    private func disableLostMode(_ device: DeviceRef, client: JamfClient) async {
-        guard await Dialogs.confirm("Lost Mode is on for “\(device.name)”.\n\nTurn it off?",
+    private func disableLostMode(_ device: DeviceRef, client: JamfClient) async -> Bool {
+        guard await ui.confirm("Lost Mode is on for “\(device.name)”.\n\nTurn it off?",
                                     yes: "Turn Off", no: "Cancel") else {
             log.add("Disable Lost Mode cancelled.")
-            return
+            return false
         }
-        await send("Disable Lost Mode on \(device.name)", work: {
+        return await send("Disable Lost Mode on \(device.name)", work: {
             try await client.disableLostMode(id: device.id)
         })
     }
 
-    func actionLock() async {
+    public func actionLock() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard let (_, tags) = await loadRecord(device, client: client) else { return }
         let presets = lockPreviewPresets(tags)
@@ -300,7 +304,7 @@ extension AppModel {
         }
         let pin = result["6-digit PIN"] ?? ""
         guard pin.count == 6, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
-            await Dialogs.warning("The PIN must be exactly 6 digits.")
+            await ui.warning("The PIN must be exactly 6 digits.")
             return
         }
         let lockMessage = result["Lock message"] ?? ""
@@ -310,10 +314,10 @@ extension AppModel {
         })
     }
 
-    func actionUpdateInventory() async {
+    public func actionUpdateInventory() async {
         guard let client = await requireClient(), let device = await selectedDevice() else { return }
         guard device.type == .mobile else {
-            await Dialogs.info(
+            await ui.info(
                 "Jamf Pro has no remote “Update Inventory” command for computers — a Mac reports "
                 + "inventory by running its own recon (e.g. `sudo jamf recon`, or on the device's next "
                 + "check-in). This action is available for mobile devices only.")

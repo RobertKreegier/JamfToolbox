@@ -1,21 +1,20 @@
 import Foundation
-import JamfToolboxCore
 
 /// Changing how a device is scoped by configuration profiles, from a
 /// Config Profiles in Scope result.
 extension AuditCenter {
     /// The findings `change` can apply to.
-    func candidates(_ change: ScopeChange, in findings: [AuditFinding]) -> [AuditFinding] {
+    public func candidates(_ change: ScopeChange, in findings: [AuditFinding]) -> [AuditFinding] {
         findings.filter { !$0.objectID.isEmpty && $0.directScope?.allows(change) == true }
     }
 
-    func applyScopeChange(_ change: ScopeChange, to selected: [AuditFinding], in result: AuditResult) async {
+    public func applyScopeChange(_ change: ScopeChange, to selected: [AuditFinding], in result: AuditResult) async {
         guard !isRunning, !changingScope, let model else { return }
         let targets = candidates(change, in: selected)
         guard !targets.isEmpty, let subject = result.subject else { return }
         guard let client = await model.requireClient() else { return }
         guard client.baseURL.caseInsensitiveCompare(result.server) == .orderedSame else {
-            await Dialogs.warning("This result is from \(result.server), but you're connected to \(client.baseURL). "
+            await model.ui.warning("This result is from \(result.server), but you're connected to \(client.baseURL). "
                                   + "Run the audit again on this server first.")
             return
         }
@@ -41,11 +40,11 @@ extension AuditCenter {
             }
         }
         if case .failure(let error) = checked {
-            await Dialogs.error(model.failureMessage(error, doing: "read the profiles and the device"))
+            await model.ui.error(model.failureMessage(error, doing: "read the profiles and the device"))
             return
         }
 
-        guard await Dialogs.show(confirmation(change, targets, device: device, username: username,
+        guard await model.ui.show(confirmation(change, targets, device: device, username: username,
                                               redistributeAll: redistributeAll),
                                  title: "\(change.title) “\(device)”?", style: .warning,
                                  buttons: [change.title, "Cancel"]) == 0 else { return }
@@ -88,7 +87,7 @@ extension AuditCenter {
         }
 
         if !problems.isEmpty {
-            await Dialogs.error((changed > 0 ? "\(changed) of \(targets.count) \(noun) changed.\n\n" : "")
+            await model.ui.error((changed > 0 ? "\(changed) of \(targets.count) \(noun) changed.\n\n" : "")
                                 + problems.joined(separator: "\n\n"))
         }
         // Show the new state.

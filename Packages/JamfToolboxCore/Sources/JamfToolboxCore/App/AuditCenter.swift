@@ -1,15 +1,13 @@
-import AppKit
-import SwiftUI
-import JamfToolboxCore
+import Foundation
 
 /// State for the Jamf Audits tab: the chosen report and its inputs, the
 /// running audit, and saved results.
 @MainActor
-final class AuditCenter: ObservableObject {
-    @Published private(set) var results: [AuditResult] = []
-    @Published var selection: Set<UUID> = []
+public final class AuditCenter: ObservableObject {
+    @Published public private(set) var results: [AuditResult] = []
+    @Published public var selection: Set<UUID> = []
 
-    @Published var reportID = AuditReports.groupDependenciesID {
+    @Published public var reportID = AuditReports.groupDependenciesID {
         didSet {
             guard oldValue != reportID else { return }
             // Keep the device kind valid for reports that only cover one side.
@@ -17,7 +15,7 @@ final class AuditCenter: ObservableObject {
             Task { await loadGroupsIfNeeded() }
         }
     }
-    @Published var parameters = AuditParameters() {
+    @Published public var parameters = AuditParameters() {
         didSet {
             guard oldValue.kind != parameters.kind else { return }
             parameters.groupID = nil
@@ -25,42 +23,42 @@ final class AuditCenter: ObservableObject {
             Task { await loadGroupsIfNeeded() }
         }
     }
-    @Published private(set) var groups: [GroupKind: [GroupSummary]] = [:]
-    @Published private(set) var loadingGroups = false
-    @Published private(set) var groupsError: String?
-    @Published private(set) var progress: AuditProgress?
+    @Published public private(set) var groups: [GroupKind: [GroupSummary]] = [:]
+    @Published public private(set) var loadingGroups = false
+    @Published public private(set) var groupsError: String?
+    @Published public private(set) var progress: AuditProgress?
     /// True while profile scopes are being changed from a result.
-    @Published var changingScope = false
+    @Published public var changingScope = false
 
-    let store: AuditStore
-    weak var model: AppModel?
+    public let store: AuditStore
+    public weak var model: AppModel?
     private var runTask: Task<Void, Never>?
 
-    var isRunning: Bool { runTask != nil }
-    var report: AuditReport { AuditReports.report(reportID) ?? AuditReports.all[0] }
-    var category: AuditCategory {
+    public var isRunning: Bool { runTask != nil }
+    public var report: AuditReport { AuditReports.report(reportID) ?? AuditReports.all[0] }
+    public var category: AuditCategory {
         get { report.category }
         set { if newValue != category, let first = AuditReports.reports(in: newValue).first { reportID = first.id } }
     }
 
-    init(store: AuditStore) {
+    public init(store: AuditStore) {
         self.store = store
         results = store.loadAll()
     }
 
     /// The result shown in the detail pane (exactly one selected).
-    var selectedResult: AuditResult? {
+    public var selectedResult: AuditResult? {
         guard selection.count == 1, let id = selection.first else { return nil }
         return results.first { $0.id == id }
     }
 
-    var currentGroups: [GroupSummary] { groups[parameters.kind] ?? [] }
+    public var currentGroups: [GroupSummary] { groups[parameters.kind] ?? [] }
 
     /// Devices offered by device reports: the working list of the chosen kind.
-    var deviceOptions: [DeviceEntry] { model?.entries(for: parameters.kind.deviceType) ?? [] }
+    public var deviceOptions: [DeviceEntry] { model?.entries(for: parameters.kind.deviceType) ?? [] }
 
     /// Whether the chosen report has everything it needs.
-    var canRun: Bool {
+    public var canRun: Bool {
         let r = report, p = parameters
         if r.needs(.group) && (p.groupID ?? "").isEmpty { return false }
         if r.needs(.device) && (p.deviceID ?? "").isEmpty { return false }
@@ -71,12 +69,12 @@ final class AuditCenter: ObservableObject {
 
     // MARK: Groups
 
-    func loadGroupsIfNeeded() async {
+    public func loadGroupsIfNeeded() async {
         guard report.needs(.group), groups[parameters.kind] == nil else { return }
         await loadGroups()
     }
 
-    func loadGroups() async {
+    public func loadGroups() async {
         let kind = parameters.kind
         guard let client = model?.client else {
             groupsError = "Connect to Jamf Pro in Settings first."
@@ -98,7 +96,7 @@ final class AuditCenter: ObservableObject {
 
     // MARK: Running
 
-    func runSelected() {
+    public func runSelected() {
         var p = parameters
         if report.needs(.group) { p.groupName = currentGroups.first { $0.id == p.groupID }?.name }
         if report.needs(.device) {
@@ -109,7 +107,7 @@ final class AuditCenter: ObservableObject {
 
     /// Re-run a saved result's report with the same inputs, against the current
     /// server. `replacing` deletes the old result once the new one is saved.
-    func rerun(_ result: AuditResult, replacing: Bool = false) {
+    public func rerun(_ result: AuditResult, replacing: Bool = false) {
         guard let report = AuditReports.report(result.reportID) else { return }
         var p = result.parameters ?? AuditParameters()
         if result.parameters == nil, let subject = result.subject {   // saved by the first version
@@ -123,7 +121,7 @@ final class AuditCenter: ObservableObject {
     }
 
     /// From a device's right-click menu: run a device report for it.
-    func runDeviceReport(_ id: String, kind: GroupKind, device: DeviceEntry) {
+    public func runDeviceReport(_ id: String, kind: GroupKind, device: DeviceEntry) {
         guard let report = AuditReports.report(id) else { return }
         reportID = id
         var p = parameters
@@ -135,7 +133,7 @@ final class AuditCenter: ObservableObject {
         run(report, p)
     }
 
-    private func run(_ report: AuditReport, _ parameters: AuditParameters, replaces old: UUID? = nil) {
+    func run(_ report: AuditReport, _ parameters: AuditParameters, replaces old: UUID? = nil) {
         guard runTask == nil, let model else { return }
         guard let client = model.client else {
             Task { _ = await model.requireClient() }
@@ -168,16 +166,16 @@ final class AuditCenter: ObservableObject {
             } catch {
                 let message = model.failureMessage(error, doing: "run \(report.title)")
                 model.log.add("Audit failed: \(message.components(separatedBy: "\n").first ?? message)")
-                await Dialogs.error(message)
+                await model.ui.error(message)
             }
         }
     }
 
-    func cancel() { runTask?.cancel() }
+    public func cancel() { runTask?.cancel() }
 
     // MARK: Saved results
 
-    func delete(_ ids: Set<UUID>) {
+    public func delete(_ ids: Set<UUID>) {
         store.delete(ids)
         results.removeAll { ids.contains($0.id) }
         selection.subtract(ids)
@@ -185,27 +183,26 @@ final class AuditCenter: ObservableObject {
     }
 
     /// Results run before the start of `day`.
-    func olderThan(_ day: Date) -> [AuditResult] {
+    public func olderThan(_ day: Date) -> [AuditResult] {
         let cutoff = Calendar.current.startOfDay(for: day)
         return results.filter { $0.runAt < cutoff }
     }
 
-    func deleteOlder(than day: Date) {
+    public func deleteOlder(than day: Date) {
         let old = Set(olderThan(day).map(\.id))
         guard !old.isEmpty else { return }
         delete(old)
     }
 
-    func exportCSV(_ result: AuditResult) async {
-        let panel = NSSavePanel()
-        panel.title = "Export audit result"
-        panel.allowedContentTypes = [.commaSeparatedText]
+    /// The name an exported result is offered under.
+    public func exportFileName(for result: AuditResult) -> String {
         let day = result.runAt.formatted(.iso8601.year().month().day())
         let about = result.subject.map { " - \($0.name)" } ?? ""
-        panel.nameFieldStringValue = "\(result.report)\(about) - \(day).csv".replacingOccurrences(of: "/", with: "-")
-        let response: NSApplication.ModalResponse
-        if let window = Dialogs.anchor { response = await panel.beginSheetModal(for: window) } else { response = panel.runModal() }
-        guard response == .OK, let url = panel.url else { return }
+        return "\(result.report)\(about) - \(day).csv".replacingOccurrences(of: "/", with: "-")
+    }
+
+    /// A result as a CSV file (UTF-8 with a byte-order mark, for Excel).
+    public func csvData(for result: AuditResult) -> Data {
         var lines: [String]
         if result.findings.contains(where: { $0.device != nil }) {   // profile and device pairs
             lines = [ListExport.csvLine(["Profile", "Device", result.detailHeading, "Excluded", "Profile ID", "Device ID"])]
@@ -219,17 +216,12 @@ final class AuditCenter: ObservableObject {
             lines = [ListExport.csvLine(["Type", "Name", result.detailHeading, "Jamf ID"])]
             lines += result.findings.map { ListExport.csvLine([$0.objectType, $0.objectName, $0.detail, $0.objectID]) }
         }
-        do {
-            try (Data([0xEF, 0xBB, 0xBF]) + Data((lines.joined(separator: "\r\n") + "\r\n").utf8)).write(to: url, options: .atomic)
-            model?.log.add("Exported audit result to \(url.lastPathComponent).")
-        } catch {
-            await Dialogs.error("Could not export the result:\n\(error.localizedDescription)")
-        }
+        return Data([0xEF, 0xBB, 0xBF]) + Data((lines.joined(separator: "\r\n") + "\r\n").utf8)
     }
 
     #if DEBUG
     /// Seeds saved results (previews only).
-    func addPreviewResults(_ samples: [AuditResult]) {
+    public func addPreviewResults(_ samples: [AuditResult]) {
         for sample in samples { try? store.save(sample) }
         results = store.loadAll()
     }

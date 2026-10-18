@@ -3,53 +3,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import JamfToolboxCore
 
-/// Everything the Settings window edits. Changes stay in this draft until Save,
-/// so Cancel (or just closing the window) discards them and credentials only
-/// reach the Keychain when the user commits.
-struct SettingsDraft: Equatable {
-    var jamfURL = ""
-    var authMethod = AuthMethod.basic
-    var oauthID = ""
-    var oauthSecret = ""
-    var basicUser = ""
-    var basicPassword = ""
-    var verifyNotes = true
-    var doubleClickAction = DeviceAction.openInJamf
-    var sslVerify = true
-    var caBundle = ""
-    var lostModePresets: [LostModePreset] = Preferences().lostModePresets
-    var lostModeSound = true
-    var namePresets: [NamePreset] = Preferences().namePresets
-    var lockPresets: [LockPreset] = Preferences().lockPresets
-    var merakiKey = ""
-
-    @MainActor
-    init(settings: SettingsStore) {
-        let p = settings.prefs
-        jamfURL = p.jamfURL
-        authMethod = p.authMethod
-        oauthID = settings.secret("client_id")
-        oauthSecret = settings.secret("client_secret")
-        basicUser = settings.secret("username")
-        basicPassword = settings.secret("password")
-        verifyNotes = p.verifyNotes
-        doubleClickAction = p.doubleClickAction
-        sslVerify = p.sslVerify
-        caBundle = p.sslCABundle
-        lostModePresets = p.lostModePresets
-        lostModeSound = p.lostModeSound
-        namePresets = p.namePresets
-        lockPresets = p.lockPresets
-        merakiKey = settings.secret("meraki_api_key")
-    }
-
-    init() {}
-
-    var credentials: (String, String) {
-        authMethod == .oauth ? (oauthID, oauthSecret) : (basicUser, basicPassword)
-    }
-}
-
 @MainActor
 enum SettingsWindow {
     private static weak var current: NSWindow?
@@ -355,16 +308,13 @@ struct SettingsView: View {
     }
 
     private func testConnection() {
-        let url = draft.jamfURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !url.isEmpty else {
-            Task { await Dialogs.info("Enter the Jamf Pro server URL first.") }
+        let client: JamfClient
+        switch draft.testClient() {
+        case .success(let built): client = built
+        case .failure(let problem):
+            Task { await Dialogs.info(problem.message) }
             return
         }
-        let (a, b) = draft.credentials
-        let client = JamfClient(baseURL: url, authMethod: draft.authMethod,
-                                credentialA: a.trimmingCharacters(in: .whitespacesAndNewlines), credentialB: b,
-                                tls: TLSPolicy(verify: draft.sslVerify,
-                                               caBundlePath: draft.caBundle.trimmingCharacters(in: .whitespaces)))
         testing = true
         Task {
             defer { testing = false }
@@ -378,61 +328,10 @@ struct SettingsView: View {
     }
 
     private func save() {
-        let url = draft.jamfURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard url.isEmpty || url.lowercased().hasPrefix("https://") else {
-            Task { await Dialogs.warning("The Jamf Pro URL should start with https://") }
+        if let problem = draft.commit(to: model, loaded: loaded) {
+            Task { await Dialogs.warning(problem) }
             return
         }
-        let settings = model.settings
-        var p = settings.prefs
-        var trimmedURL = url
-        while trimmedURL.hasSuffix("/") { trimmedURL.removeLast() }
-        p.jamfURL = trimmedURL
-        p.authMethod = draft.authMethod
-        p.verifyNotes = draft.verifyNotes
-        p.doubleClickAction = draft.doubleClickAction
-        p.sslVerify = draft.sslVerify
-        p.sslCABundle = draft.caBundle.trimmingCharacters(in: .whitespaces)
-        func cleanName(_ name: String) -> String {
-            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "Untitled" : trimmed
-        }
-        p.lostModePresets = draft.lostModePresets.map { preset in
-            var clean = preset
-            clean.name = cleanName(preset.name)
-            clean.message = preset.message.trimmingCharacters(in: .whitespacesAndNewlines)
-            clean.phone = preset.phone.trimmingCharacters(in: .whitespaces)
-            clean.footnote = preset.footnote.trimmingCharacters(in: .whitespaces)
-            return clean
-        }
-        p.lostModeSound = draft.lostModeSound
-        p.namePresets = draft.namePresets.map { preset in
-            var clean = preset
-            clean.name = cleanName(preset.name)
-            clean.template = preset.template.trimmingCharacters(in: .whitespaces)
-            return clean
-        }
-        p.lockPresets = draft.lockPresets.map { preset in
-            var clean = preset
-            clean.name = cleanName(preset.name)
-            clean.message = preset.message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return clean
-        }
-        settings.prefs = p
-
-        // Only touch the Keychain for secrets the user actually changed.
-        func store(_ account: String, _ new: String, _ old: String, trim: Bool = false) {
-            let value = trim ? new.trimmingCharacters(in: .whitespacesAndNewlines) : new
-            if value != old { settings.setSecret(account, value) }
-        }
-        store("client_id", draft.oauthID, loaded.oauthID, trim: true)
-        store("client_secret", draft.oauthSecret, loaded.oauthSecret)
-        store("username", draft.basicUser, loaded.basicUser, trim: true)
-        store("password", draft.basicPassword, loaded.basicPassword)
-        store("meraki_api_key", draft.merakiKey, loaded.merakiKey, trim: true)
-
-        model.persist()
-        model.settingsSaved()
         window?.performClose(nil)
     }
 }

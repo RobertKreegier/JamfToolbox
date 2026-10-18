@@ -75,5 +75,6 @@ class H(http.server.BaseHTTPRequestHandler):
             if md.find("name") is None: ET.SubElement(md, "name").text = "iPad-" + md.find("id").text
         S[int(m[1])] = ET.tostring(root.find("scope"), encoding="unicode")
         self.send(201, f"<configuration_profile><id>{m[1]}</id></configuration_profile>", "text/xml")
-ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(sys.argv[1] + "/cert.pem", sys.argv[1] + "/key.pem")
-s = http.server.ThreadingHTTPServer(("127.0.0.1", 18448), H); s.socket = ctx.wrap_socket(s.socket, server_side=True); s.serve_forever()
+if __name__ == "__main__":   # mock_field.py imports this file for its profiles
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(sys.argv[1] + "/cert.pem", sys.argv[1] + "/key.pem")
+    s = http.server.ThreadingHTTPServer(("127.0.0.1", 18448), H); s.socket = ctx.wrap_socket(s.socket, server_side=True); s.serve_forever()
