@@ -81,8 +81,8 @@ public struct Preferences: Codable {
     public var sslCABundle = ""
     /// The first preset is the default. Never empty.
     public var lostModePresets = [LostModePreset(name: "Default",
-                                          message: "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
-                                          footnote: "Property of Rock Ridge Public Schools")]
+                                          message: "{name} - (Lost Mode: Please return this device to your IT department)",
+                                          footnote: "")]
     public var lostModeSound = true
     /// Device-name templates for Rename; the first is the default. Never empty.
     public var namePresets = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
@@ -92,7 +92,7 @@ public struct Preferences: Codable {
     public var listColumns: [String]?
     /// The first preset is the default. Never empty.
     public var lockPresets = [LockPreset(name: "Default",
-                                  message: "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock.")]
+                                  message: "This device has been locked by your IT department. Please contact them to unlock it.")]
     public var deviceListComputer: [DeviceEntry] = []
     public var deviceListMobile: [DeviceEntry] = []
     public var merakiOrgID = ""
@@ -101,6 +101,8 @@ public struct Preferences: Codable {
     public var merakiNetworkName = ""
     /// Fallback only: base64 secrets used when the Keychain can't be written.
     public var credentialsInFile: [String: String] = [:]
+    /// The user chose to go without Meraki, so the setup guide stops asking.
+    public var merakiSetupSkipped = false
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case jamfURL = "jamf_url"
@@ -128,6 +130,7 @@ public struct Preferences: Codable {
         case lostModePresets = "lost_mode_presets"
         case lockPresets = "lock_message_presets"
         case namePresets = "rename_presets"
+        case merakiSetupSkipped = "meraki_setup_skipped"
     }
 
     public init() {}
@@ -187,6 +190,7 @@ public struct Preferences: Codable {
         merakiNetworkID = value(.merakiNetworkID, merakiNetworkID)
         merakiNetworkName = value(.merakiNetworkName, merakiNetworkName)
         credentialsInFile = value(.credentialsInFile, credentialsInFile)
+        merakiSetupSkipped = value(.merakiSetupSkipped, merakiSetupSkipped)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -218,6 +222,7 @@ public struct Preferences: Codable {
         try c.encode(merakiNetworkID, forKey: .merakiNetworkID)
         try c.encode(merakiNetworkName, forKey: .merakiNetworkName)
         try c.encode(credentialsInFile, forKey: .credentialsInFile)
+        try c.encode(merakiSetupSkipped, forKey: .merakiSetupSkipped)
     }
 
     // MARK: Convenience

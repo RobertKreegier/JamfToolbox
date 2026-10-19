@@ -118,7 +118,7 @@ public final class AppModel: ObservableObject {
     public static var version: String { AppInfo.version }
     public var version: String { Self.version }
 
-    /// Off for previews, which shouldn't pop open Settings.
+    /// Off for previews, which shouldn't pop up the setup guide.
     public var opensSettingsWhenUnconfigured = true
 
     public init(settings: SettingsStore? = nil, presenter: AppPresenter) {
@@ -143,10 +143,10 @@ public final class AppModel: ObservableObject {
         log.add("Welcome to \(AppInfo.name) \(version). "
                 + (hasURL ? "Type in the search field to find devices and build your list."
                           : "\(ui.openSettingsHint) to connect to Jamf Pro."))
-        if !hasURL && opensSettingsWhenUnconfigured {
+        if opensSettingsWhenUnconfigured && setupStatus.needsGuide {
             Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                openSettings()
+                await showSetupGuide()
             }
         }
     }
@@ -209,9 +209,8 @@ public final class AppModel: ObservableObject {
     }
 
     public func requireClient() async -> JamfClient? {
-        if let client { return client }
-        await ui.info("Add your Jamf Pro URL and credentials in Settings first.")
-        openSettings()
+        if let client, setupStatus.jamfReady { return client }
+        await showSetupGuide()
         return nil
     }
 

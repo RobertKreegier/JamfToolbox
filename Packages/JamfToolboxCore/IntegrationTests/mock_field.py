@@ -40,7 +40,7 @@ def mobile_record(i):
         "general": {"id": i, "name": d["name"], "display_name": d["name"], "serial_number": d["serial"],
                     "os_version": d["os"], "ip_address": d["ip"], "wifi_mac_address": d["mac"], "model": d["model"],
                     "asset_tag": d["asset"], "udid": f"UDID-{i}", "last_inventory_update": "2026-10-17 08:15:00"},
-        "location": {"username": d["user"], "realname": d["real"], "email_address": f"{d['user']}@rrps.example" if d["user"] else "",
+        "location": {"username": d["user"], "realname": d["real"], "email_address": f"{d['user']}@example.org" if d["user"] else "",
                      "building": d["building"], "room": d["room"], "department": "", "position": ""},
         "security": {"lost_mode_enabled": LOST[i]},
         "mobile_device_groups": base.get("mobile_device_groups", []),
@@ -66,7 +66,7 @@ def meraki_client(mac):
         if d["mac"] and d["mac"] == mac and d["ap"]:
             return {"mac": mac, "manufacturer": "Apple", "records": [{
                 "network": {"id": "N_" + d["network"].replace(" ", ""), "name": d["network"]},
-                "recentDeviceName": d["ap"], "recentDeviceMac": "e0:55:3d:00:00:01", "ssid": "RRPS-Staff",
+                "recentDeviceName": d["ap"], "recentDeviceMac": "e0:55:3d:00:00:01", "ssid": "Example-Staff",
                 "lastSeen": int(now - d["seen"]), "ip": d["ip"], "description": d["name"], "status": "Online"}]}
     return None
 
@@ -111,7 +111,7 @@ class H(sx.H):
         if m and int(m[1]) in COMPUTERS: return self.json(200, computer_record(int(m[1])))
         m = re.match(r"/api/v2/mobile-devices/(\d+)/detail$", p)
         if m: return self.json(200, {"managementId": f"mm{m[1]}"})
-        if p == "/meraki/organizations": return self.json(200, [{"id": "1", "name": "RRPS"}])
+        if p == "/meraki/organizations": return self.json(200, [{"id": "1", "name": "Example District"}])
         if p == "/meraki/organizations/1/networks":
             return self.json(200, [{"id": "N_HighSchool", "name": "High School"}, {"id": "N_MiddleSchool", "name": "Middle School"}])
         if p == "/meraki/organizations/1/clients/search":

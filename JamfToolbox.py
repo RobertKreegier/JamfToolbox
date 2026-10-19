@@ -55,15 +55,15 @@ DEFAULTS = {
     "verify_notes": True,            # show confirmation preview before sending
     "ssl_verify": True,              # verify the server's TLS certificate
     "ssl_ca_bundle": "/etc/ssl/cert.pem", # optional path to a .pem for internal CAs
-    "lost_mode_message": "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
+    "lost_mode_message": "{name} - (Lost Mode: Please return this device to your IT department)",
     "lost_mode_phone": "",
-    "lost_mode_footnote": "Property of Rock Ridge Public Schools",
+    "lost_mode_footnote": "",
     "lost_mode_sound": True,
     "rename_format_computer": "{realname} - {serial}",
     "rename_format_mobile": "{realname} - {username} - {serial}",
     "double_click_action": "action_open_in_jamf",
     "list_columns": None,            # None -> DEFAULT_COLUMNS; user-chosen order
-    "lock_message": "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock.",
+    "lock_message": "This device has been locked by your IT department. Please contact them to unlock it.",
     "device_list_computer": [],      # saved working list of computers
     "device_list_mobile": [],        # saved working list of mobile devices
     "meraki_org_id": "",             # remembered Meraki organization
