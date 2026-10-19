@@ -99,6 +99,12 @@ public actor JamfClient {
         return fresh
     }
 
+    /// Signs in ahead of the first request, so the first search doesn't wait
+    /// on the TLS handshake and token. Failures are left for that request to report.
+    public func warmUp() async {
+        _ = try? await currentToken()
+    }
+
     public func testConnection() async throws {
         token = nil
         tokenExpiry = nil
