@@ -101,8 +101,6 @@ public struct Preferences: Codable {
     public var merakiNetworkName = ""
     /// Fallback only: base64 secrets used when the Keychain can't be written.
     public var credentialsInFile: [String: String] = [:]
-    /// The user chose to go without Meraki, so the setup guide stops asking.
-    public var merakiSetupSkipped = false
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case jamfURL = "jamf_url"
@@ -130,7 +128,6 @@ public struct Preferences: Codable {
         case lostModePresets = "lost_mode_presets"
         case lockPresets = "lock_message_presets"
         case namePresets = "rename_presets"
-        case merakiSetupSkipped = "meraki_setup_skipped"
     }
 
     public init() {}
@@ -190,7 +187,6 @@ public struct Preferences: Codable {
         merakiNetworkID = value(.merakiNetworkID, merakiNetworkID)
         merakiNetworkName = value(.merakiNetworkName, merakiNetworkName)
         credentialsInFile = value(.credentialsInFile, credentialsInFile)
-        merakiSetupSkipped = value(.merakiSetupSkipped, merakiSetupSkipped)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -222,7 +218,6 @@ public struct Preferences: Codable {
         try c.encode(merakiNetworkID, forKey: .merakiNetworkID)
         try c.encode(merakiNetworkName, forKey: .merakiNetworkName)
         try c.encode(credentialsInFile, forKey: .credentialsInFile)
-        try c.encode(merakiSetupSkipped, forKey: .merakiSetupSkipped)
     }
 
     // MARK: Convenience

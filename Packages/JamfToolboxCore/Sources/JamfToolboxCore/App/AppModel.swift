@@ -111,6 +111,9 @@ public final class AppModel: ObservableObject {
     public var search: DeviceSearch { search(for: deviceType) }
 
     public private(set) var client: JamfClient?
+    /// A Meraki key is set, so the network features (Wi-Fi access point,
+    /// Network Info) are shown. Without one they stay hidden.
+    @Published public private(set) var networkLookupsEnabled = false
     var apNames: [String: [String: String]] = [:]   // Meraki network id → AP MAC → name
     private var settingsObserver: AnyCancellable?
     private var didStart = false
@@ -158,6 +161,7 @@ public final class AppModel: ObservableObject {
     }
 
     public func rebuildClient() {
+        networkLookupsEnabled = !settings.secret("meraki_api_key").isEmpty
         let prefs = settings.prefs
         guard !prefs.jamfURL.isEmpty else { client = nil; return }
         let (a, b) = settings.credentials(for: prefs.authMethod)

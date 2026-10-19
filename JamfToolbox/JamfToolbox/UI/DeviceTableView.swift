@@ -211,7 +211,7 @@ struct DeviceTableView: NSViewRepresentable {
             // Actions first, in a fixed order for both device types. Mobile-only
             // actions stay visible but disabled on computers so every action
             // keeps its position.
-            for action in DeviceAction.allCases {
+            for action in model.deviceActions {
                 let title = (count > 1 && action.supportsBulk) ? "\(action.label) (\(count))" : action.label
                 let item = BlockMenuItem(title) { [model] in model.perform(action) }
                 item.isEnabled = model.canPerform(action)

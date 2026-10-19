@@ -1,6 +1,6 @@
-// Signing for this project. The bundle ID below is a neutral placeholder so
-// the project builds for anyone. Put your own team and bundle ID in
-// Signing.local.xcconfig next to this file (it's git-ignored), for example:
+// Signing for this project. Building it for your own organization? Put your
+// signing team and your own bundle ID in Signing.local.xcconfig next to this
+// file (it's git-ignored), for example:
 //
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   PRODUCT_BUNDLE_IDENTIFIER = org.yourdistrict.JamfToolbox
@@ -8,6 +8,6 @@
 // On iOS, changing the bundle ID of an installed app starts it fresh: its
 // settings and saved credentials stay with the old ID.
 
-PRODUCT_BUNDLE_IDENTIFIER = com.jamftoolbox.JamfToolbox
+PRODUCT_BUNDLE_IDENTIFIER = com.RRPS.JamfToolbox
 
 #include? "Signing.local.xcconfig"

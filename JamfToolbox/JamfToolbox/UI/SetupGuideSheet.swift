@@ -30,10 +30,6 @@ struct SetupGuideSheet: View {
                            text: SetupGuideText.meraki(status))
 
             HStack {
-                if status.jamfReady && !status.merakiReady && !status.merakiSkipped {
-                    Button("Skip Meraki") { done(.skipMeraki) }
-                        .help("Don't ask about Meraki again. You can add a key in Settings any time.")
-                }
                 Spacer()
                 Button("Later") { done(.later) }
                     .keyboardShortcut(.cancelAction)
@@ -72,9 +68,6 @@ private struct SetupGuideItem: View {
 
 #if DEBUG
 #Preview("First run") {
-    SetupGuideSheet(status: SetupStatus(jamfReady: false, merakiReady: false, merakiSkipped: false), done: { _ in })
-}
-#Preview("Meraki missing") {
-    SetupGuideSheet(status: SetupStatus(jamfReady: true, merakiReady: false, merakiSkipped: false), done: { _ in })
+    SetupGuideSheet(status: SetupStatus(jamfReady: false, merakiReady: false), done: { _ in })
 }
 #endif
