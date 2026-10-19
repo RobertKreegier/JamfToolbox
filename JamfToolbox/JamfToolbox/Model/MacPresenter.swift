@@ -75,6 +75,11 @@ final class MacPresenter: AppPresenter {
         }
     }
 
+    func setupGuide(_ status: SetupStatus) async -> SetupGuideChoice {
+        NSApp.activate(ignoringOtherApps: true)
+        return await Sheets.present { done in SetupGuideSheet(status: status, done: done) }
+    }
+
     /// Settings live in our own window rather than a SwiftUI `Settings` scene:
     /// newer macOS versions only open that scene from a `SettingsLink`, which
     /// can't be used from model code (first launch, "add credentials first" prompts).

@@ -51,6 +51,9 @@ public protocol AppPresenter: AnyObject {
     func pickMerakiNetwork(_ meraki: MerakiClient, savedOrgID: String,
                            savedNetworkID: String) async -> MerakiNetworkChoice?
 
+    /// What the app needs (Jamf Pro, optionally Meraki) and where to enter it.
+    func setupGuide(_ status: SetupStatus) async -> SetupGuideChoice
+
     func openSettings()
     func openURL(_ url: URL)
     func copyToClipboard(_ text: String)

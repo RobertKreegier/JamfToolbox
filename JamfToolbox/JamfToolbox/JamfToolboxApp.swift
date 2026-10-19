@@ -46,12 +46,15 @@ struct ToolboxCommands: Commands {
         // Every action lives here too, so the whole app is reachable from the
         // keyboard. Mobile-only actions stay visible but disabled on computers.
         CommandMenu("Device") {
-            ForEach(DeviceAction.allCases) { action in
+            ForEach(model.deviceActions) { action in
                 Button(DeviceMenuLabel.title(for: action, selectionCount: model.selection.count)) {
                     model.perform(action)
                 }
                 .disabled(!model.canPerform(action))
-                if action == .networkInfo || action == .updateInventory { Divider() }
+                // Info actions, then commands, then the rest. Network Info may be hidden.
+                if action == .updateInventory || action == (model.networkLookupsEnabled ? .networkInfo : .showInfo) {
+                    Divider()
+                }
             }
             Divider()
             Menu("Advanced") {

@@ -81,8 +81,8 @@ public struct Preferences: Codable {
     public var sslCABundle = ""
     /// The first preset is the default. Never empty.
     public var lostModePresets = [LostModePreset(name: "Default",
-                                          message: "{name} - (Lost Mode: Please return to tech desk to disable lost mode)",
-                                          footnote: "Property of Rock Ridge Public Schools")]
+                                          message: "{name} - (Lost Mode: Please return this device to your IT department)",
+                                          footnote: "")]
     public var lostModeSound = true
     /// Device-name templates for Rename; the first is the default. Never empty.
     public var namePresets = [NamePreset(name: "Default", template: Preferences.defaultNameTemplate)]
@@ -92,7 +92,7 @@ public struct Preferences: Codable {
     public var listColumns: [String]?
     /// The first preset is the default. Never empty.
     public var lockPresets = [LockPreset(name: "Default",
-                                  message: "This device has been locked by RRPS Tech Department. Please contact tech@rrps.org or bring to tech desk to remove lock.")]
+                                  message: "This device has been locked by your IT department. Please contact them to unlock it.")]
     public var deviceListComputer: [DeviceEntry] = []
     public var deviceListMobile: [DeviceEntry] = []
     public var merakiOrgID = ""

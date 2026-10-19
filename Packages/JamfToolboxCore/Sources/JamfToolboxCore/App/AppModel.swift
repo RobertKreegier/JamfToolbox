@@ -111,6 +111,9 @@ public final class AppModel: ObservableObject {
     public var search: DeviceSearch { search(for: deviceType) }
 
     public private(set) var client: JamfClient?
+    /// A Meraki key is set, so the network features (Wi-Fi access point,
+    /// Network Info) are shown. Without one they stay hidden.
+    @Published public private(set) var networkLookupsEnabled = false
     var apNames: [String: [String: String]] = [:]   // Meraki network id → AP MAC → name
     private var settingsObserver: AnyCancellable?
     private var didStart = false
@@ -118,7 +121,7 @@ public final class AppModel: ObservableObject {
     public static var version: String { AppInfo.version }
     public var version: String { Self.version }
 
-    /// Off for previews, which shouldn't pop open Settings.
+    /// Off for previews, which shouldn't pop up the setup guide.
     public var opensSettingsWhenUnconfigured = true
 
     public init(settings: SettingsStore? = nil, presenter: AppPresenter) {
@@ -143,10 +146,10 @@ public final class AppModel: ObservableObject {
         log.add("Welcome to \(AppInfo.name) \(version). "
                 + (hasURL ? "Type in the search field to find devices and build your list."
                           : "\(ui.openSettingsHint) to connect to Jamf Pro."))
-        if !hasURL && opensSettingsWhenUnconfigured {
+        if opensSettingsWhenUnconfigured && setupStatus.needsGuide {
             Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                openSettings()
+                await showSetupGuide()
             }
         }
     }
@@ -158,6 +161,7 @@ public final class AppModel: ObservableObject {
     }
 
     public func rebuildClient() {
+        networkLookupsEnabled = !settings.secret("meraki_api_key").isEmpty
         let prefs = settings.prefs
         guard !prefs.jamfURL.isEmpty else { client = nil; return }
         let (a, b) = settings.credentials(for: prefs.authMethod)
@@ -209,9 +213,8 @@ public final class AppModel: ObservableObject {
     }
 
     public func requireClient() async -> JamfClient? {
-        if let client { return client }
-        await ui.info("Add your Jamf Pro URL and credentials in Settings first.")
-        openSettings()
+        if let client, setupStatus.jamfReady { return client }
+        await showSetupGuide()
         return nil
     }
 

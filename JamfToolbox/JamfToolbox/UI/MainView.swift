@@ -83,7 +83,7 @@ struct MainView: View {
             .help("Export the list to CSV or Excel (⌘E)")
 
             Menu {
-                ForEach(DeviceAction.allCases) { action in
+                ForEach(model.deviceActions) { action in
                     Button { model.perform(action) } label: {
                         Label(DeviceMenuLabel.title(for: action, selectionCount: model.selection.count),
                               systemImage: action.symbolName)

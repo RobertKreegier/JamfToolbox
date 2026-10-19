@@ -3,6 +3,12 @@ import Foundation
 extension AppModel {
     // MARK: Dispatch
 
+    /// The device actions to offer, in menu order: Network Info only once a
+    /// network service (Meraki) is set up.
+    public var deviceActions: [DeviceAction] {
+        DeviceAction.allCases.filter { $0 != .networkInfo || networkLookupsEnabled }
+    }
+
     public func canPerform(_ action: DeviceAction) -> Bool {
         guard showingDevices, action.isAvailable(for: deviceType) else { return false }
         if selection.count > 1 { return action.supportsBulk }
