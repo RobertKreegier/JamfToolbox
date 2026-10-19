@@ -275,7 +275,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Jamf Toolbox";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 3.3.0;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -301,7 +301,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Jamf Toolbox";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 3.3.0;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
