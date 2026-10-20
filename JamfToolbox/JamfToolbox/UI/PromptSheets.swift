@@ -14,8 +14,16 @@ struct PreviewSheet: View {
     @State var fields: [PreviewField]
     var presets: [PreviewPreset] = []
     var presetLabel = "Preset"
+    /// Red confirm button, and Cancel (not confirm) answers Return.
+    var destructive = false
     @State var selectedPreset = 0
     let done: ([String: String]?) -> Void
+
+    private var values: [String: String] {
+        var result: [String: String] = [:]
+        for field in fields { result[field.label] = field.value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return result
+    }
 
     private func apply(_ index: Int) {
         guard presets.indices.contains(index) else { return }
@@ -70,16 +78,17 @@ struct PreviewSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { done(nil) }
-                    .keyboardShortcut(.cancelAction)
-                Button(confirmLabel) {
-                    var result: [String: String] = [:]
-                    for field in fields {
-                        result[field.label] = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                    done(result)
+                if destructive {
+                    Button("Cancel") { done(nil) }
+                        .keyboardShortcut(.defaultAction)
+                    Button(confirmLabel, role: .destructive) { done(values) }
+                        .tint(.red)
+                } else {
+                    Button("Cancel") { done(nil) }
+                        .keyboardShortcut(.cancelAction)
+                    Button(confirmLabel) { done(values) }
+                        .keyboardShortcut(.defaultAction)
                 }
-                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)

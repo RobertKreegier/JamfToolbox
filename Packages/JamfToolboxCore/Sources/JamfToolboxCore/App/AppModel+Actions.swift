@@ -120,9 +120,10 @@ extension AppModel {
 
     /// Ask the user to review/edit values; returns trimmed values keyed by label.
     public func askPreview(title: String, intro: String, fields: [PreviewField], confirm: String,
-                    presets: [PreviewPreset] = [], presetLabel: String = "Preset") async -> [String: String]? {
+                    presets: [PreviewPreset] = [], presetLabel: String = "Preset",
+                    destructive: Bool = false) async -> [String: String]? {
         await ui.preview(title: title, intro: intro, fields: fields, confirm: confirm,
-                         presets: presets, presetLabel: presetLabel)
+                         presets: presets, presetLabel: presetLabel, destructive: destructive)
     }
 
     /// Saved Lost Mode presets rendered for one device, for the preview's picker.

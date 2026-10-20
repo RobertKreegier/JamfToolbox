@@ -25,9 +25,10 @@ public protocol AppPresenter: AnyObject {
     func alert(_ message: String, title: String, style: AlertStyle, buttons: [String]) async -> Int
 
     /// Review and edit values before sending; returns trimmed values keyed by
-    /// field label, or nil when cancelled.
+    /// field label, or nil when cancelled. `destructive` marks the confirm
+    /// button as destructive and makes Cancel the default (Return) action.
     func preview(title: String, intro: String, fields: [PreviewField], confirm: String,
-                 presets: [PreviewPreset], presetLabel: String) async -> [String: String]?
+                 presets: [PreviewPreset], presetLabel: String, destructive: Bool) async -> [String: String]?
 
     /// Pick one of several saved presets; nil when cancelled.
     func choosePreset(title: String, intro: String, options: [(name: String, text: String)],

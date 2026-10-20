@@ -20,10 +20,10 @@ final class MacPresenter: AppPresenter {
     }
 
     func preview(title: String, intro: String, fields: [PreviewField], confirm: String,
-                 presets: [PreviewPreset], presetLabel: String) async -> [String: String]? {
+                 presets: [PreviewPreset], presetLabel: String, destructive: Bool) async -> [String: String]? {
         await Sheets.present { done in
             PreviewSheet(title: title, intro: intro, confirmLabel: confirm, fields: fields,
-                         presets: presets, presetLabel: presetLabel, done: done)
+                         presets: presets, presetLabel: presetLabel, destructive: destructive, done: done)
         }
     }
 
