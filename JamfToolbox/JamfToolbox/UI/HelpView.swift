@@ -87,7 +87,9 @@ private let helpSections: [HelpSection] = [
             + "Passcode, Wipe, and Delete. Clear Passcode and Clear Screen Time Passcode are mobile-only, and "
             + "Restart, Shut Down and Clear Screen Time Passcode need a supervised device. These act on one "
             + "device at a time. Wiping asks you to type the device's name (and, for a Mac, set a 6-digit "
-            + "PIN). Delete removes the device's record from Jamf Pro; wipe the device first, because once "
+            + "PIN). Wiping an iPhone or iPad always clears Activation Lock (supervised devices), keeps any "
+            + "cellular data plan and suppresses Proximity Setup, like Jamf Pro's Wipe Device options; you can "
+            + "also choose Return to Service. Delete removes the device's record from Jamf Pro; wipe the device first, because once "
             + "the record is gone Jamf can no longer send it commands. If your account lacks the privilege "
             + "for a command, nothing is sent and the message names the privilege to ask for.",
         "Jamf Audits: the third tab runs reports against Jamf Pro and keeps the results. Reports only read; the "

@@ -46,17 +46,23 @@ struct PreviewSheet: View {
                 }
                 ForEach($fields) { $field in
                     GridRow {
-                        Text(field.label)
-                            .gridColumnAlignment(.trailing)
-                            .padding(.top, field.multiline ? 4 : 0)
-                        if field.multiline {
-                            TextEditor(text: $field.value)
-                                .font(.body)
-                                .frame(height: 70)
-                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+                        if field.isToggle {
+                            // A checkbox sits in the value column, its label beside it.
+                            Color.clear.frame(width: 1, height: 1).gridColumnAlignment(.trailing)
+                            Toggle(field.label, isOn: $field.isOn)
                         } else {
-                            TextField("", text: $field.value)
-                                .textFieldStyle(.roundedBorder)
+                            Text(field.label)
+                                .gridColumnAlignment(.trailing)
+                                .padding(.top, field.multiline ? 4 : 0)
+                            if field.multiline {
+                                TextEditor(text: $field.value)
+                                    .font(.body)
+                                    .frame(height: 70)
+                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+                            } else {
+                                TextField("", text: $field.value)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
                     }
                 }

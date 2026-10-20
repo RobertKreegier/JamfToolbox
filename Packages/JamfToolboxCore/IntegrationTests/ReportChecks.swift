@@ -153,6 +153,28 @@ func ck(_ c: Bool, _ m: String) { print(c ? "  ok   \(m)" : "  FAIL \(m)"); if !
     r = await run("policies-ongoing-no-trigger"); show("Ongoing", r)
     ck(names(r) == ["Ongoing None"], "ongoing with no trigger (self service / triggered excluded)")
 
+    // Wiping a mobile device uses the erase endpoint with the Jamf web interface's options.
+    let w1 = try? await client.eraseDevice(type: .mobile, id: "101")
+    let w2 = try? await client.eraseDevice(type: .mobile, id: "101", returnToService: true)
+    var missing: ServiceError?
+    do { _ = try await client.eraseDevice(type: .mobile, id: "999") } catch let e as ServiceError { missing = e } catch {}
+    let erases = (try? await client.get("/__erases"))?.arrayValue ?? []
+    func options(_ i: Int) -> [String: String] {
+        guard i < erases.count, case .object(let pairs)? = erases[i]["body"] else { return [:] }
+        // Real JSON booleans only (a string "true" would show as "string").
+        return Dictionary(uniqueKeysWithValues: pairs.map { pair -> (String, String) in
+            if case .bool(let b) = pair.value { return (pair.key, b ? "true" : "false") }
+            return (pair.key, "string")
+        })
+    }
+    ck(erases.count == 2 && erases.first?["path"]?.text == "/api/v2/mobile-devices/101/erase"
+       && erases.first?["contentType"]?.text == "application/json", "wipe: POST to the mobile erase endpoint, JSON")
+    ck(options(0) == ["clearActivationLock": "true", "preserveDataPlan": "true", "disallowProximitySetup": "true",
+                      "returnToService": "false"], "wipe: Activation Lock cleared, data plan kept, Proximity Setup off: \(options(0))")
+    ck(options(1)["returnToService"] == "true" && w2?.contains("Return to Service on") == true && w1?.contains("Return to Service") == false,
+       "wipe: Return to Service only when chosen")
+    ck(missing?.isNotFound == true && missing?.message.contains("Nothing was sent") == true, "wipe: Not Found explains, no fallback")
+
     // Old saved results still decode.
     let old = #"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","report":"Static Group Dependencies","runAt":"2026-10-01T10:00:00Z","server":"https://x","subject":{"kind":"mobile","id":"7","name":"Grade 5"},"findings":[{"objectType":"Policy","objectName":"A","objectID":"1","relationship":"Scoped","webPage":"policies.html"}],"warnings":[],"objectsScanned":3}"#
     let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601

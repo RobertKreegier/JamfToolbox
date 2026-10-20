@@ -94,11 +94,26 @@ public struct PreviewField: Identifiable {
     public let label: String
     public var value: String
     public var multiline = false
+    /// Drawn as a checkbox/switch; `value` is "true" or "false".
+    public var isToggle = false
 
     public init(label: String, value: String, multiline: Bool = false) {
         self.label = label
         self.value = value
         self.multiline = multiline
+    }
+
+    /// A checkbox. Its result is "true" or "false".
+    public static func toggle(_ label: String, on: Bool = false) -> PreviewField {
+        var field = PreviewField(label: label, value: on ? "true" : "false")
+        field.isToggle = true
+        return field
+    }
+
+    /// Binding helper for a toggle field.
+    public var isOn: Bool {
+        get { value == "true" }
+        set { value = newValue ? "true" : "false" }
     }
 }
 

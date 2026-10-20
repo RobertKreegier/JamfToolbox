@@ -78,12 +78,16 @@ extension AppModel {
         let isComputer = device.type == .computer
         var fields: [PreviewField] = []
         if isComputer { fields.append(PreviewField(label: "6-digit PIN", value: "")) }
+        if !isComputer { fields.append(.toggle(Self.returnToServiceLabel)) }
         fields.append(PreviewField(label: "Type the device name to confirm", value: ""))
 
         guard let result = await askPreview(
             title: "Wipe “\(device.name)”",
             intro: "This erases ALL data on the device and can't be undone."
-                + (isComputer ? " The PIN below will be required to unlock the Mac afterwards; record it first." : ""),
+                + (isComputer ? " The PIN below will be required to unlock the Mac afterwards; record it first."
+                   : " Activation Lock is cleared (supervised devices), any cellular data plan is kept, and "
+                     + "Proximity Setup is suppressed. Return to Service reconnects the device to Wi-Fi and "
+                     + "re-enrolls it after the erase, using your Jamf Pro Return to Service settings."),
             fields: fields, confirm: "Wipe Device") else {
             return log.add("Wipe cancelled.")
         }
@@ -102,10 +106,13 @@ extension AppModel {
             log.add("Wipe PIN for \(device.name): \(pin)  (save this!)")
         }
         let type = device.type
+        let returnToService = result[Self.returnToServiceLabel] == "true"
         await send("Wipe \(device.name)", privilege: privilege, work: {
-            try await client.eraseDevice(type: type, id: device.id, pin: pin)
+            try await client.eraseDevice(type: type, id: device.id, pin: pin, returnToService: returnToService)
         })
     }
+
+    static let returnToServiceLabel = "Return to Service after the erase"
 
     private func deleteRecord(_ device: DeviceRef, client: JamfClient, privilege: String) async {
         // Cancel is the first (default) button: this one should never fire on a reflexive Return.
