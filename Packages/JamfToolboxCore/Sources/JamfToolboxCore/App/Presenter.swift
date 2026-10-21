@@ -25,9 +25,10 @@ public protocol AppPresenter: AnyObject {
     func alert(_ message: String, title: String, style: AlertStyle, buttons: [String]) async -> Int
 
     /// Review and edit values before sending; returns trimmed values keyed by
-    /// field label, or nil when cancelled.
+    /// field label, or nil when cancelled. `destructive` marks the confirm
+    /// button as destructive and makes Cancel the default (Return) action.
     func preview(title: String, intro: String, fields: [PreviewField], confirm: String,
-                 presets: [PreviewPreset], presetLabel: String) async -> [String: String]?
+                 presets: [PreviewPreset], presetLabel: String, destructive: Bool) async -> [String: String]?
 
     /// Pick one of several saved presets; nil when cancelled.
     func choosePreset(title: String, intro: String, options: [(name: String, text: String)],
@@ -94,11 +95,26 @@ public struct PreviewField: Identifiable {
     public let label: String
     public var value: String
     public var multiline = false
+    /// Drawn as a checkbox/switch; `value` is "true" or "false".
+    public var isToggle = false
 
     public init(label: String, value: String, multiline: Bool = false) {
         self.label = label
         self.value = value
         self.multiline = multiline
+    }
+
+    /// A checkbox. Its result is "true" or "false".
+    public static func toggle(_ label: String, on: Bool = false) -> PreviewField {
+        var field = PreviewField(label: label, value: on ? "true" : "false")
+        field.isToggle = true
+        return field
+    }
+
+    /// Binding helper for a toggle field.
+    public var isOn: Bool {
+        get { value == "true" }
+        set { value = newValue ? "true" : "false" }
     }
 }
 

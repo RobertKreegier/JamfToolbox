@@ -1,5 +1,5 @@
 # Mock Jamf Pro server (Classic + Jamf Pro API, JSON) for ReportChecks.swift. Started by run.sh.
-import http.server, ssl, json, sys, time, urllib.parse
+import http.server, re, ssl, json, sys, time, urllib.parse
 from datetime import datetime, timedelta, timezone
 now = datetime.now(timezone.utc)
 iso = lambda days: (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -123,15 +123,23 @@ PENDING = [cmd("mm102","MOBILE_DEVICE","PENDING","SETTINGS",d) for d in (1,2,3,4
         + [cmd("mm102","MOBILE_DEVICE","PENDING","INSTALL_PROFILE",4,31), cmd("mc1","COMPUTER","PENDING","DEVICE_LOCK",1)]
 ERRORS = [cmd("mm101","MOBILE_DEVICE","ERROR","INSTALL_PROFILE",2,31,"Profile installation failed"), cmd("mc2","COMPUTER","ERROR","INSTALL_PROFILE",3,20,"The payload is invalid")]
 REQS = []
+ERASES = []
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
     def j(self,c,o):
         b=json.dumps(o).encode(); self.send_response(c); self.send_header("Content-Length",str(len(b))); self.end_headers(); self.wfile.write(b)
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length") or 0)); self.j(200,{"token":"t","expires":"2099-01-01T00:00:00Z"})
+        body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        m = re.match(r"^/api/v2/mobile-devices/(\d+)/erase$", self.path)
+        if m:   # Wipe with options; only iPad-101 exists.
+            if m.group(1) != "101": return self.j(404, {"httpStatus": 404, "errors": []})
+            ERASES.append({"path": self.path, "contentType": self.headers.get("Content-Type"), "body": json.loads(body)})
+            return self.j(200, {"deviceId": m.group(1), "commandUuid": "erase-uuid"})
+        self.j(200,{"token":"t","expires":"2099-01-01T00:00:00Z"})
     def do_GET(self):
         REQS.append(self.path)
         if self.path == "/__reqs": return self.j(200, REQS)
+        if self.path == "/__erases": return self.j(200, ERASES)
         u = urllib.parse.urlsplit(self.path); q = urllib.parse.parse_qs(u.query)
         if self.command != "GET": return self.j(405, {})
         if u.path == "/JSSResource/restrictedsoftware": return self.j(403, {})

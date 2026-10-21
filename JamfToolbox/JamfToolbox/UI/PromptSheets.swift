@@ -14,8 +14,16 @@ struct PreviewSheet: View {
     @State var fields: [PreviewField]
     var presets: [PreviewPreset] = []
     var presetLabel = "Preset"
+    /// Red confirm button, and Cancel (not confirm) answers Return.
+    var destructive = false
     @State var selectedPreset = 0
     let done: ([String: String]?) -> Void
+
+    private var values: [String: String] {
+        var result: [String: String] = [:]
+        for field in fields { result[field.label] = field.value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return result
+    }
 
     private func apply(_ index: Int) {
         guard presets.indices.contains(index) else { return }
@@ -46,17 +54,23 @@ struct PreviewSheet: View {
                 }
                 ForEach($fields) { $field in
                     GridRow {
-                        Text(field.label)
-                            .gridColumnAlignment(.trailing)
-                            .padding(.top, field.multiline ? 4 : 0)
-                        if field.multiline {
-                            TextEditor(text: $field.value)
-                                .font(.body)
-                                .frame(height: 70)
-                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+                        if field.isToggle {
+                            // A checkbox sits in the value column, its label beside it.
+                            Color.clear.frame(width: 1, height: 1).gridColumnAlignment(.trailing)
+                            Toggle(field.label, isOn: $field.isOn)
                         } else {
-                            TextField("", text: $field.value)
-                                .textFieldStyle(.roundedBorder)
+                            Text(field.label)
+                                .gridColumnAlignment(.trailing)
+                                .padding(.top, field.multiline ? 4 : 0)
+                            if field.multiline {
+                                TextEditor(text: $field.value)
+                                    .font(.body)
+                                    .frame(height: 70)
+                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+                            } else {
+                                TextField("", text: $field.value)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
                     }
                 }
@@ -64,16 +78,17 @@ struct PreviewSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { done(nil) }
-                    .keyboardShortcut(.cancelAction)
-                Button(confirmLabel) {
-                    var result: [String: String] = [:]
-                    for field in fields {
-                        result[field.label] = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                    done(result)
+                if destructive {
+                    Button("Cancel") { done(nil) }
+                        .keyboardShortcut(.defaultAction)
+                    Button(confirmLabel, role: .destructive) { done(values) }
+                        .tint(.red)
+                } else {
+                    Button("Cancel") { done(nil) }
+                        .keyboardShortcut(.cancelAction)
+                    Button(confirmLabel) { done(values) }
+                        .keyboardShortcut(.defaultAction)
                 }
-                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)

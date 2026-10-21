@@ -455,11 +455,34 @@ public actor JamfClient {
     /// Erases the device. Computers require a 6-digit PIN. There is deliberately
     /// no second route: retrying a destructive command after an ambiguous
     /// failure could send it twice.
-    public func eraseDevice(type: DeviceType, id: String, pin: String = "") async throws -> String {
-        var data = ["commandType": "ERASE_DEVICE"]
-        if type == .computer { data["pin"] = pin }
-        try await deviceMDM(type, id: id, data)
-        return "Wipe command queued."
+    ///
+    /// Mobile devices use Jamf Pro's erase endpoint, which takes the same options
+    /// as the web interface's Wipe Device dialog. Activation Lock is always
+    /// cleared (supervised devices), any cellular data plan is kept and
+    /// Proximity Setup is suppressed; Return to Service is optional and uses the
+    /// server's Return to Service settings.
+    public func eraseDevice(type: DeviceType, id: String, pin: String = "",
+                            returnToService: Bool = false) async throws -> String {
+        guard type == .mobile else {
+            try await deviceMDM(type, id: id, ["commandType": "ERASE_DEVICE", "pin": pin])
+            return "Wipe command queued."
+        }
+        let numeric = try numericID(id)
+        let options: [String: Bool] = ["clearActivationLock": true, "preserveDataPlan": true,
+                                       "disallowProximitySetup": true, "returnToService": returnToService]
+        let body = try JSONSerialization.data(withJSONObject: options, options: [.sortedKeys])
+        do {
+            try await request("/api/v2/mobile-devices/\(numeric)/erase", method: "POST",
+                              body: body, contentType: "application/json")
+        } catch let error as ServiceError where error.isNotFound {
+            // No fallback to the generic MDM command: it can't clear Activation Lock.
+            throw ServiceError("Jamf Pro returned Not Found for the wipe. Either the device no longer exists, or "
+                               + "this Jamf Pro version doesn't have the mobile device erase endpoint "
+                               + "(/api/v2/mobile-devices/{id}/erase), which is needed to clear Activation Lock. "
+                               + "Nothing was sent.", isNotFound: true)
+        }
+        return "Wipe command queued (Activation Lock cleared, data plan kept, Proximity Setup suppressed"
+            + (returnToService ? ", Return to Service on)." : ").")
     }
 
     /// Removes the device record from Jamf Pro (the device itself is untouched).

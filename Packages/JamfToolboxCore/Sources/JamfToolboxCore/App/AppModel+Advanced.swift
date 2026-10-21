@@ -73,39 +73,40 @@ extension AppModel {
         }
     }
 
-    /// Wipe asks the user to type the device's name, so a stray click can't erase the wrong machine.
+    /// Wipe is confirmed in a dialog whose default (Return) action is Cancel, so
+    /// a stray keypress can't erase the device. Macs need a PIN; iPhones and
+    /// iPads can choose Return to Service.
     private func wipe(_ device: DeviceRef, client: JamfClient, privilege: String) async {
         let isComputer = device.type == .computer
-        var fields: [PreviewField] = []
-        if isComputer { fields.append(PreviewField(label: "6-digit PIN", value: "")) }
-        fields.append(PreviewField(label: "Type the device name to confirm", value: ""))
-
+        let fields: [PreviewField] = isComputer ? [PreviewField(label: "6-digit PIN", value: "")]
+                                                : [.toggle(Self.returnToServiceLabel)]
         guard let result = await askPreview(
-            title: "Wipe “\(device.name)”",
+            title: "Wipe “\(device.name)”?",
             intro: "This erases ALL data on the device and can't be undone."
-                + (isComputer ? " The PIN below will be required to unlock the Mac afterwards; record it first." : ""),
-            fields: fields, confirm: "Wipe Device") else {
+                + (isComputer ? " The PIN below will be required to unlock the Mac afterwards; record it first."
+                   : " Activation Lock is cleared (supervised devices), any cellular data plan is kept, and "
+                     + "Proximity Setup is suppressed. Return to Service reconnects the device to Wi-Fi and "
+                     + "re-enrolls it after the erase, using your Jamf Pro Return to Service settings."),
+            fields: fields, confirm: "Wipe Device", destructive: true) else {
             return log.add("Wipe cancelled.")
-        }
-        let typed = result["Type the device name to confirm"] ?? ""
-        guard typed.caseInsensitiveCompare(device.name) == .orderedSame else {
-            await ui.warning("The name you typed doesn't match “\(device.name)”. Nothing was sent.")
-            return log.add("Wipe cancelled: confirmation name didn't match.")
         }
         var pin = ""
         if isComputer {
             pin = result["6-digit PIN"] ?? ""
             guard pin.count == 6, pin.allSatisfy({ $0.isASCII && $0.isNumber }) else {
-                await ui.warning("The PIN must be exactly 6 digits.")
-                return
+                await ui.warning("The PIN must be exactly 6 digits. Nothing was sent.")
+                return log.add("Wipe cancelled: the PIN wasn't 6 digits.")
             }
             log.add("Wipe PIN for \(device.name): \(pin)  (save this!)")
         }
         let type = device.type
+        let returnToService = result[Self.returnToServiceLabel] == "true"
         await send("Wipe \(device.name)", privilege: privilege, work: {
-            try await client.eraseDevice(type: type, id: device.id, pin: pin)
+            try await client.eraseDevice(type: type, id: device.id, pin: pin, returnToService: returnToService)
         })
     }
+
+    static let returnToServiceLabel = "Return to Service after the erase"
 
     private func deleteRecord(_ device: DeviceRef, client: JamfClient, privilege: String) async {
         // Cancel is the first (default) button: this one should never fire on a reflexive Return.
