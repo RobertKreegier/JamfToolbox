@@ -59,7 +59,7 @@ struct ToolboxCommands: Commands {
             Divider()
             Menu("Advanced") {
                 ForEach(AdvancedCommand.available(for: model.deviceType)) { command in
-                    Button(command.label + (command.needsEllipsis ? "…" : "")) { model.perform(command) }
+                    Button(command.menuTitle(count: model.selection.count) + (command.needsEllipsis ? "…" : "")) { model.perform(command) }
                         .disabled(!model.canPerform(command))
                 }
             }

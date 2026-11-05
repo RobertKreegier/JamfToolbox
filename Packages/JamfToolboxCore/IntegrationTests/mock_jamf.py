@@ -124,6 +124,7 @@ PENDING = [cmd("mm102","MOBILE_DEVICE","PENDING","SETTINGS",d) for d in (1,2,3,4
 ERRORS = [cmd("mm101","MOBILE_DEVICE","ERROR","INSTALL_PROFILE",2,31,"Profile installation failed"), cmd("mc2","COMPUTER","ERROR","INSTALL_PROFILE",3,20,"The payload is invalid")]
 REQS = []
 ERASES = []
+DELETES = []
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
     def j(self,c,o):
@@ -131,13 +132,20 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
         m = re.match(r"^/api/v2/mobile-devices/(\d+)/erase$", self.path)
-        if m:   # Wipe with options; only iPad-101 exists.
-            if m.group(1) != "101": return self.j(404, {"httpStatus": 404, "errors": []})
+        if m:   # Wipe with options. 101 and 104 exist; 103 is "permission denied".
+            if m.group(1) == "103": return self.j(403, {"httpStatus": 403, "errors": []})
+            if m.group(1) not in ("101", "104"): return self.j(404, {"httpStatus": 404, "errors": []})
             ERASES.append({"path": self.path, "contentType": self.headers.get("Content-Type"), "body": json.loads(body)})
             return self.j(200, {"deviceId": m.group(1), "commandUuid": "erase-uuid"})
         self.j(200,{"token":"t","expires":"2099-01-01T00:00:00Z"})
+    def do_DELETE(self):
+        # Deleting device records: 103 is "permission denied"; the rest succeed.
+        DELETES.append(self.path)
+        if self.path.endswith("/id/103"): return self.j(403, {})
+        self.j(200, {})
     def do_GET(self):
         REQS.append(self.path)
+        if self.path == "/__deletes": return self.j(200, DELETES)
         if self.path == "/__reqs": return self.j(200, REQS)
         if self.path == "/__erases": return self.j(200, ERASES)
         u = urllib.parse.urlsplit(self.path); q = urllib.parse.parse_qs(u.query)

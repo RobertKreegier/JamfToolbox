@@ -265,6 +265,27 @@ public enum AdvancedCommand: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Wipe and Delete can run on several devices at once (with a typed
+    /// confirmation); the rest act on one device at a time. Bulk wipe is for
+    /// mobile devices (iPhone, iPad, Apple TV) only: each Mac needs its own PIN.
+    public func supportsBulk(for type: DeviceType) -> Bool {
+        switch self {
+        case .wipe: return type == .mobile
+        case .delete: return true
+        default: return false
+        }
+    }
+
+    /// Menu title for `count` selected devices: "Wipe 5 Devices" for a bulk form.
+    public func menuTitle(count: Int) -> String {
+        guard count > 1 else { return label }
+        switch self {
+        case .wipe: return "Wipe \(count) Devices"
+        case .delete: return "Delete \(count) from Jamf Pro"
+        default: return label
+        }
+    }
+
     public static func available(for type: DeviceType) -> [AdvancedCommand] {
         allCases.filter { $0.applies(to: type) }
     }
