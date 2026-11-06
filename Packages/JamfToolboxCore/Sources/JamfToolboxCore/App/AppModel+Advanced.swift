@@ -2,12 +2,25 @@ import Foundation
 
 extension AppModel {
     /// Advanced commands act on one device at a time: they are disruptive
-    /// enough that each should be confirmed against a specific device.
+    /// enough that each should be confirmed against a specific device. Wipe
+    /// (mobile devices) and Delete also have a bulk form, confirmed by typing
+    /// the number of devices.
     public func canPerform(_ command: AdvancedCommand) -> Bool {
-        showingDevices && selection.count == 1 && command.applies(to: deviceType)
+        guard showingDevices, command.applies(to: deviceType), !selection.isEmpty else { return false }
+        return selection.count == 1 || command.supportsBulk(for: deviceType)
     }
 
     public func perform(_ command: AdvancedCommand) {
+        if selection.count > 1 && command.supportsBulk(for: deviceType) {
+            Task {
+                switch command {
+                case .wipe: await bulkWipe()
+                case .delete: await bulkDelete()
+                default: break
+                }
+            }
+            return
+        }
         Task { await run(command) }
     }
 

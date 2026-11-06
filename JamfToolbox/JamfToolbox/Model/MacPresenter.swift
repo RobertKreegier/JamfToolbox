@@ -42,6 +42,22 @@ final class MacPresenter: AppPresenter {
         }
     }
 
+    func confirmDestructiveBulk(title: String, intro: String, lines: [String], options: [PreviewField],
+                                confirmLabel: String, warning: String,
+                                typedConfirmation: String) async -> [String: String]? {
+        await Sheets.present { done in
+            DestructiveBulkSheet(title: title, intro: intro, lines: lines, options: options,
+                                 confirmLabel: confirmLabel, warning: warning,
+                                 typedConfirmation: typedConfirmation, done: done)
+        }
+    }
+
+    func showBulkResults(title: String, summary: String, results: [BulkResult]) async {
+        _ = await Sheets.present { done in
+            BulkResultsSheet(title: title, summary: summary, results: results, done: done)
+        }
+    }
+
     func showProgress(title: String, progress: BulkProgress) -> () -> Void {
         let handle = Sheets.show { ProgressSheet(title: title, progress: progress) }
         return { handle.dismiss() }

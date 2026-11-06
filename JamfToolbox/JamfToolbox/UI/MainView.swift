@@ -94,7 +94,7 @@ struct MainView: View {
                 Menu("Advanced") {
                     ForEach(AdvancedCommand.available(for: model.deviceType)) { command in
                         Button { model.perform(command) } label: {
-                            Label(command.label + (command.needsEllipsis ? "…" : ""), systemImage: command.symbolName)
+                            Label(command.menuTitle(count: model.selection.count) + (command.needsEllipsis ? "…" : ""), systemImage: command.symbolName)
                         }
                         .disabled(!model.canPerform(command))
                     }

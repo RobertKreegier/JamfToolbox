@@ -182,6 +182,133 @@ struct BulkConfirmSheet: View {
     }
 }
 
+// MARK: - Destructive bulk confirm
+
+/// For bulk actions that can't be undone (wipe, delete): the review list, any
+/// options, and a field where the user types the number of devices. The
+/// confirm button stays disabled until it matches, and Return cancels.
+struct DestructiveBulkSheet: View {
+    let title: String
+    let intro: String
+    let lines: [String]
+    @State var options: [PreviewField]
+    let confirmLabel: String
+    let warning: String
+    let typedConfirmation: String
+    let done: ([String: String]?) -> Void
+    @State private var typed = ""
+
+    private var matches: Bool { typed.trimmingCharacters(in: .whitespaces) == typedConfirmation }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            Text(intro).fixedSize(horizontal: false, vertical: true)
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+            ScrollView([.vertical, .horizontal]) {
+                Text(lines.joined(separator: "\n"))
+                    .font(.system(size: 12, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: min(260, max(80, CGFloat(lines.count) * 17 + 24)))
+            .background(Color(nsColor: .textBackgroundColor))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.35)))
+
+            ForEach($options) { $option in
+                Toggle(option.label, isOn: $option.isOn)
+            }
+            HStack {
+                Text("Type \(typedConfirmation) to confirm:")
+                TextField("", text: $typed)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { done(nil) }
+                    .keyboardShortcut(.defaultAction)
+                Button(confirmLabel, role: .destructive) {
+                    var values: [String: String] = [:]
+                    for option in options { values[option.label] = option.value }
+                    done(values)
+                }
+                .tint(.red)
+                .disabled(!matches)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+}
+
+// MARK: - Bulk results
+
+/// Every device's outcome after a bulk action, failures first.
+struct BulkResultsSheet: View {
+    let title: String
+    let summary: String
+    let results: [BulkResult]
+    let done: (Bool) -> Void
+
+    private var ordered: [BulkResult] {
+        func rank(_ outcome: BulkResult.Outcome) -> Int {
+            switch outcome { case .failed: return 0; case .notSent: return 1; case .succeeded: return 2 }
+        }
+        return results.enumerated().sorted {
+            rank($0.element.outcome) != rank($1.element.outcome) ? rank($0.element.outcome) < rank($1.element.outcome)
+                : $0.offset < $1.offset
+        }.map(\.element)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.headline)
+            Text(summary).fontWeight(.semibold)
+            List(ordered) { result in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    BulkOutcomeIcon(outcome: result.outcome)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(result.device)
+                        if !result.detail.isEmpty {
+                            Text(result.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            .frame(height: min(320, max(120, CGFloat(results.count) * 40 + 20)))
+            HStack {
+                Text("Also recorded in the Activity log.").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { done(true) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+}
+
+struct BulkOutcomeIcon: View {
+    let outcome: BulkResult.Outcome
+
+    var body: some View {
+        switch outcome {
+        case .succeeded: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        case .notSent: Image(systemName: "minus.circle").foregroundStyle(.secondary)
+        }
+    }
+}
+
 // MARK: - Progress
 
 /// Progress for a bulk operation. The work runs in an async loop; this sheet

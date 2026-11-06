@@ -2,6 +2,8 @@
 # Integration checks for JamfToolboxCore against local mock Jamf Pro servers.
 #
 #   ReportChecks       every audit report, against mock_jamf.py (port 18446)
+#   BulkChecks         bulk wipe and bulk delete through the app model, against
+#                      mock_jamf.py with a scripted presenter
 #   ScopeChangeChecks  Exclude / Remove Target / Remove Exclusion, against the
 #                      stateful scope XML mock, mock_scope_xml.py (port 18448)
 #
@@ -21,12 +23,18 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout $work/key.pem -out $work/cert.
 
 python3 $here/mock_jamf.py $work > $work/mock_jamf.log 2>&1 & jamf_pid=$!
 python3 $here/mock_scope_xml.py $work > $work/mock_scope_xml.log 2>&1 & xml_pid=$!
-sleep 1.5
+# Wait (up to 15 s) until both mocks answer, rather than guessing a delay.
+for port in 18446 18448; do
+  for i in {1..30}; do
+    curl -s -o /dev/null --cacert $work/cert.pem https://localhost:$port/ && break
+    sleep 0.5
+  done
+done
 
 failed=0
-for check in ReportChecks ScopeChangeChecks; do
+for check in ReportChecks ScopeChangeChecks BulkChecks; do
   echo "== $check"
-  if ! swiftc -parse-as-library -o $work/$check $sources/*.swift $here/$check.swift; then failed=1; continue; fi
+  if ! swiftc -parse-as-library -o $work/$check $(find $sources -name "*.swift") $here/$check.swift; then failed=1; continue; fi
   $work/$check $work || failed=1
 done
 exit $failed

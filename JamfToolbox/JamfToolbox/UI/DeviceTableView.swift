@@ -243,7 +243,7 @@ struct DeviceTableView: NSViewRepresentable {
             let advanced = NSMenu()
             advanced.autoenablesItems = false
             for command in AdvancedCommand.available(for: type) {
-                let item = BlockMenuItem(command.label + (command.needsEllipsis ? "…" : "")) { [model] in
+                let item = BlockMenuItem(command.menuTitle(count: count) + (command.needsEllipsis ? "…" : "")) { [model] in
                     model.perform(command)
                 }
                 item.isEnabled = model.canPerform(command)

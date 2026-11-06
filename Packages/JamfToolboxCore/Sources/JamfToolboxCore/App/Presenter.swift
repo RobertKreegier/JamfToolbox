@@ -38,6 +38,18 @@ public protocol AppPresenter: AnyObject {
     func confirmBulk(title: String, intro: String, lines: [String], confirmLabel: String,
                      warning: String) async -> Bool
 
+    /// Confirms a bulk action that can't be undone (wipe, delete): a review list,
+    /// optional `options` (e.g. a Return to Service checkbox), and the confirm
+    /// button stays disabled until `typedConfirmation` (the device count) is
+    /// typed. Returns the options' values (empty when there are none), or nil
+    /// when cancelled.
+    func confirmDestructiveBulk(title: String, intro: String, lines: [String], options: [PreviewField],
+                                confirmLabel: String, warning: String,
+                                typedConfirmation: String) async -> [String: String]?
+
+    /// Per-device results after a bulk action.
+    func showBulkResults(title: String, summary: String, results: [BulkResult]) async
+
     /// Shows progress for a bulk operation; call the returned closure to dismiss it.
     func showProgress(title: String, progress: BulkProgress) -> () -> Void
 
@@ -89,6 +101,25 @@ public extension AppPresenter {
 }
 
 // MARK: - Values passed to the presenter
+
+/// How one device fared in a bulk action.
+public struct BulkResult: Identifiable, Hashable {
+    public enum Outcome: Hashable {
+        case succeeded, failed, notSent
+    }
+
+    public let id = UUID()
+    public let device: String
+    public let outcome: Outcome
+    /// What happened: the server's confirmation, the error, or why it wasn't sent.
+    public let detail: String
+
+    public init(device: String, outcome: Outcome, detail: String) {
+        self.device = device
+        self.outcome = outcome
+        self.detail = detail
+    }
+}
 
 public struct PreviewField: Identifiable {
     public let id = UUID()
