@@ -63,11 +63,19 @@ func ck(_ c: Bool, _ m: String) { print(c ? "  ok   \(m)" : "  FAIL \(m)"); if !
     do { _ = try await apply(.removeTarget, "403"); ck(false, "403 should throw") }
     catch let e as ServiceError { ck(e.isPermissionDenied, "403 → permission denied") } catch { ck(false, "\(error)") }
 
+    // Jamf can't save the profile: a plain message, not its HTML status page.
+    do { _ = try await apply(.exclude, "409"); ck(false, "409 should throw") }
+    catch let e as ServiceError {
+        ck(e.message == "Jamf Pro rejected the change (HTTP 409 Conflict: Unable to update the database). "
+           + "Nothing was changed. Jamf Pro's server log has the details.", "409 → readable message: \(e.message)")
+    } catch { ck(false, "\(error)") }
+    ck(JamfClient.readableErrorBody(Data("plain text body".utf8)) == "plain text body", "non-HTML error bodies kept as is")
+
     // Request shape.
     let puts = try! await client.get("/__puts")
     let first = puts.arrayValue!.first!
     ck(first["ctype"]?.text == "application/xml" && first["body"]!.text.hasPrefix("<?xml"), "PUT is XML: \(first["body"]!.text.prefix(80))")
-    ck(puts.arrayValue!.count == 6, "PUT count 6 (\(puts.arrayValue!.count)); no-ops sent nothing")
+    ck(puts.arrayValue!.count == 7, "PUT count 7 (incl. the refused 409) (\(puts.arrayValue!.count)); no-ops sent nothing")
 
     // DirectScope rules
     ck(DirectScope(targetedDirectly: false, targetedByUser: false).allows(.removeTarget) == false, "group-only target: no Remove Target")
