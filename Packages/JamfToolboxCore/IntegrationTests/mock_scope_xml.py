@@ -60,7 +60,7 @@ class H(http.server.BaseHTTPRequestHandler):
             if m[2] == "Scope":
                 return self.send(200, f'<?xml version="1.0" encoding="UTF-8"?><configuration_profile>{S[i]}</configuration_profile>', "text/xml")
             return self.send(200, json.dumps({"configuration_profile": {"general": {"id": i, "name": f"P{i}", "redeploy_on_update": "All" if i == 150 else "Newly Assigned"}}}), "application/json")
-        if m and int(m[1]) == 403:
+        if m and int(m[1]) in (403, 409):
             return self.send(200, f'<configuration_profile>{scope_xml(devs=[101])}</configuration_profile>', "text/xml")
         self.send(404, "nf", "text/plain")
     def do_PUT(self):
@@ -68,6 +68,8 @@ class H(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers["Content-Length"])).decode()
         puts.append({"path": self.path, "ctype": self.headers.get("Content-Type"), "body": body})
         if m and int(m[1]) == 403: return self.send(403, "<html>forbidden</html>", "text/html")
+        if m and int(m[1]) == 409:   # Jamf's status page when it can't save the profile
+            return self.send(409, '<html>\n<head>\n<title>Status page</title>\n</head>\n<body style="font-family: sans-serif;">\n<p style="font-size: 1.2em;font-weight: bold;margin: 1em 0px;">Conflict</p>\n<p>Unable to update the database</p>\n<p>You can get technical details <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.4.10">here</a>.<br>\nPlease continue your visit at our <a href="/">home page</a>.\n</p>\n</body>\n</html>', "text/html")
         root = ET.fromstring(body)
         assert root.tag == "configuration_profile" and [c.tag for c in root] == ["scope"], body
         # Jamf fills names back in on read.

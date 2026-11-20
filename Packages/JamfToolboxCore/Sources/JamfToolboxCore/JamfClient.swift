@@ -155,11 +155,43 @@ public actor JamfClient {
                                isPermissionDenied: true)
         case 404:
             throw ServiceError("Not found (404): \(path)", isNotFound: true)
+        case 409:
+            // Jamf Pro couldn't save the record (e.g. "Unable to update the database"):
+            // the whole request was refused.
+            let detail = Self.readableErrorBody(result.data)
+            throw ServiceError("Jamf Pro rejected the change (HTTP 409 Conflict" + (detail.isEmpty ? "" : ": \(detail)")
+                               + "). Nothing was changed. Jamf Pro's server log has the details.")
         default:
-            let detail = String(decoding: result.data.prefix(300), as: UTF8.self)
-            throw ServiceError("HTTP \(result.status) on \(method) \(path). \(detail)")
+            let detail = Self.readableErrorBody(result.data)
+            throw ServiceError("HTTP \(result.status) on \(method) \(path)." + (detail.isEmpty ? "" : " \(detail)"))
         }
         return result.data
+    }
+
+    /// The useful text of an error response. Jamf's Classic API answers errors
+    /// with an HTML status page ("Conflict", "Unable to update the database",
+    /// links to the HTTP spec…); keep only its message paragraphs.
+    static func readableErrorBody(_ data: Data) -> String {
+        let text = String(decoding: data.prefix(4000), as: UTF8.self)
+        guard text.range(of: "<html", options: .caseInsensitive) != nil else {
+            return String(text.prefix(300)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let paragraphs = text.components(separatedBy: "<p").dropFirst().compactMap { chunk -> String? in
+            guard let start = chunk.firstIndex(of: ">") else { return nil }
+            let body = chunk[chunk.index(after: start)...].components(separatedBy: "</p>").first ?? ""
+            let plain = body.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+                .replacingOccurrences(of: "&nbsp;", with: " ").replacingOccurrences(of: "&amp;", with: "&")
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return plain.isEmpty ? nil : plain
+        }
+        // Drop the bare status name and the boilerplate links.
+        let useful = paragraphs.filter { line in
+            !["Conflict", "Bad Request", "Not Found", "Forbidden", "Unauthorized", "Server Error"].contains(line)
+                && !line.localizedCaseInsensitiveContains("technical details")
+                && !line.localizedCaseInsensitiveContains("continue your visit")
+        }
+        return String(useful.joined(separator: "; ").prefix(300))
     }
 
     // MARK: Searches & detail
